@@ -1,0 +1,6 @@
+flask
+python-dotenv
+plaid-python
+anthropic
+gunicorn
+psycopg2-binary
