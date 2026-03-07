@@ -568,6 +568,157 @@ body {
 .error-toast.show { display: block; }
 
 /* ============================
+   AUTH
+   ============================ */
+.welcome-auth { text-align: center; }
+
+.auth-link {
+    color: var(--text2);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-weight: 500;
+    cursor: pointer;
+}
+.auth-link:hover { color: var(--text); }
+
+.auth-link-small {
+    font-size: 0.78rem;
+    color: var(--text3);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+.auth-link-small:hover { color: var(--text); }
+
+.picker-user {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-right: 6px;
+}
+
+.picker-header-left {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ============================
+   SAVED CATEGORIES
+   ============================ */
+.saved-section {
+    padding: 16px 20px 0;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.saved-header {
+    margin-bottom: 10px;
+}
+
+.saved-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.saved-cards {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.saved-cards::-webkit-scrollbar { display: none; }
+
+.saved-card {
+    position: relative;
+    flex-shrink: 0;
+    width: 120px;
+    padding: 14px 12px;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    cursor: pointer;
+    text-align: center;
+    transition: transform 0.1s, border-color 0.15s;
+}
+.saved-card:active { transform: scale(0.96); }
+.saved-card:hover { border-color: var(--text3); }
+
+.saved-remove {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    background: none;
+    border: none;
+    font-size: 0.9rem;
+    color: var(--text3);
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.saved-card:hover .saved-remove { opacity: 1; }
+
+.saved-emoji {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+}
+
+.saved-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+}
+
+.saved-total {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+}
+
+.saved-change {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.change-up { color: #FF3B30; }
+.change-down { color: #34C759; }
+
+/* ============================
+   PREFETCH PROGRESS
+   ============================ */
+.prefetch-progress {
+    text-align: center;
+    padding: 8px 0;
+}
+
+.prefetch-progress span {
+    font-size: 0.72rem;
+    color: var(--text3);
+    font-weight: 500;
+}
+
+.prefetch-check {
+    color: #34C759;
+    font-size: 0.7em;
+    margin-left: 4px;
+}
+
+/* ============================
    RESPONSIVE
    ============================ */
 @media (min-width: 600px) {

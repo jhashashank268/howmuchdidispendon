@@ -45,7 +45,7 @@ api_client = plaid.ApiClient(configuration)
 client = plaid_api.PlaidApi(api_client)
 
 
-def create_link_token():
+def create_link_token(client_user_id="user-1"):
     request = LinkTokenCreateRequest(
         products=[Products("transactions")],
         additional_consented_products=[
@@ -55,7 +55,7 @@ def create_link_token():
         client_name="How Much Did I Spend",
         country_codes=[CountryCode("US")],
         language="en",
-        user=LinkTokenCreateRequestUser(client_user_id="user-1"),
+        user=LinkTokenCreateRequestUser(client_user_id=client_user_id),
     )
     response = client.link_token_create(request)
     return response.to_dict()["link_token"]

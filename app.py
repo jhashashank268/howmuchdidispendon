@@ -1,8 +1,10 @@
 import os
 import time
 import json
+import uuid
+import threading
 from datetime import date, timedelta
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session
 from dotenv import load_dotenv
 import plaid as plaid_module
 
@@ -14,6 +16,44 @@ import pet_categorizer
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev")
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+
+CATEGORIES = [
+    {"key": "dog", "emoji": "\U0001f436"},
+    {"key": "groceries", "emoji": "\U0001f6d2"},
+    {"key": "coffee", "emoji": "\u2615"},
+    {"key": "restaurants", "emoji": "\U0001f37d\ufe0f"},
+    {"key": "rent", "emoji": "\U0001f3e0"},
+    {"key": "clothes", "emoji": "\U0001f455"},
+    {"key": "rideshare", "emoji": "\U0001f697"},
+    {"key": "subscriptions", "emoji": "\U0001f4f1"},
+    {"key": "travel", "emoji": "\u2708\ufe0f"},
+    {"key": "fitness", "emoji": "\U0001f4aa"},
+    {"key": "fast food", "emoji": "\U0001f35f"},
+    {"key": "alcohol", "emoji": "\U0001f377"},
+]
+
+# Track prefetch progress per scope key
+_prefetch_status = {}
+
+
+def _get_scope():
+    """Return (user_id, anon_id) from session."""
+    user_id = session.get("user_id")
+    if user_id:
+        return user_id, None
+    anon_id = session.get("anon_id")
+    if not anon_id:
+        anon_id = str(uuid.uuid4())
+        session["anon_id"] = anon_id
+    return None, anon_id
+
+
+def _scope_key():
+    """A string key for identifying the current scope (for cache keys, prefetch tracking)."""
+    uid, aid = _get_scope()
+    return f"u:{uid}" if uid else f"a:{aid}"
 
 
 def _serialize_txn(txn):
@@ -38,20 +78,18 @@ def _serialize_txn(txn):
     }
 
 
-def _get_transactions():
+def _get_transactions(user_id=None, anon_id=None):
     """Fetch transactions from cache or Plaid. Returns (txns, institution_names) or (None, error_msg)."""
-    linked = db.get_all_access_tokens()
+    linked = db.get_all_access_tokens(user_id=user_id, anon_id=anon_id)
     if not linked:
         return None, "No bank connected. Please link your account."
 
     txn_cache_key = "|".join(sorted(l["item_id"] for l in linked))
 
-    # Check transaction cache first (2 hour TTL)
     cached_txns, cached_insts = db.get_cached_transactions(txn_cache_key)
     if cached_txns is not None:
         return (cached_txns, cached_insts), None
 
-    # Fetch from Plaid
     all_transactions = []
     institution_names = []
 
@@ -79,27 +117,140 @@ def _get_transactions():
     if not all_transactions:
         return None, "No transactions found. Try reconnecting your bank."
 
-    # Cache the raw transactions
-    db.cache_transactions(txn_cache_key, all_transactions, institution_names)
+    db.cache_transactions(txn_cache_key, all_transactions, institution_names, user_id=user_id, anon_id=anon_id)
     return (all_transactions, institution_names), None
 
 
+def _run_single_analysis(all_transactions, institution_names, category, linked, user_id=None, anon_id=None):
+    """Run analysis for a single category and cache it. Returns the result dict."""
+    analysis_cache_key = "|".join(sorted(l["item_id"] for l in linked)) + f":{category}"
+    cached = db.get_cached_analysis(analysis_cache_key)
+    if cached:
+        return cached
+
+    result = pet_categorizer.analyze_pet_spending(all_transactions, pet_name=category)
+
+    today = date.today()
+    d30 = str(today - timedelta(days=30))
+    d90 = str(today - timedelta(days=90))
+
+    total_30d = sum(t["amount"] for t in result["transactions"] if t["date"] >= d30)
+    total_90d = sum(t["amount"] for t in result["transactions"] if t["date"] >= d90)
+
+    all_dates = [t["date"] for t in all_transactions if t.get("date")]
+    earliest = min(all_dates) if all_dates else str(today)
+    days_available = (today - date.fromisoformat(earliest)).days
+
+    result["total_30d"] = round(total_30d, 2)
+    result["total_90d"] = round(total_90d, 2)
+    result["total_1yr"] = result["total_spent"]
+    result["days_available"] = days_available
+    result["earliest_date"] = earliest
+    result["institutions"] = institution_names
+    result["category"] = category
+
+    db.cache_analysis(analysis_cache_key, result, user_id=user_id, anon_id=anon_id)
+
+    # Auto-save category
+    cat_obj = next((c for c in CATEGORIES if c["key"] == category), None)
+    emoji = cat_obj["emoji"] if cat_obj else None
+    db.upsert_saved_category(category, emoji, result["total_1yr"], user_id=user_id, anon_id=anon_id)
+
+    return result
+
+
+def _prefetch_all_categories(user_id, anon_id):
+    """Background job: analyze all 12 preset categories."""
+    scope_key = f"u:{user_id}" if user_id else f"a:{anon_id}"
+    _prefetch_status[scope_key] = {"total": len(CATEGORIES), "done": 0, "categories": []}
+
+    result, error = _get_transactions(user_id=user_id, anon_id=anon_id)
+    if error:
+        _prefetch_status[scope_key]["error"] = error
+        return
+
+    all_transactions, institution_names = result
+    linked = db.get_all_access_tokens(user_id=user_id, anon_id=anon_id)
+
+    for cat in CATEGORIES:
+        try:
+            _run_single_analysis(all_transactions, institution_names, cat["key"], linked, user_id=user_id, anon_id=anon_id)
+        except Exception as e:
+            print(f"Prefetch error for {cat['key']}: {e}")
+        _prefetch_status[scope_key]["done"] += 1
+        _prefetch_status[scope_key]["categories"].append(cat["key"])
+
+    _prefetch_status[scope_key]["complete"] = True
+
+
+# --- Routes ---
+
 @app.route("/")
 def index():
-    # Detect subdomain category (e.g., dog.howmuchdidispendon.com)
-    host = request.host.split(":")[0]  # strip port
+    host = request.host.split(":")[0]
     parts = host.split(".")
     subdomain_category = None
     if len(parts) > 2 and parts[0] not in ("www", ""):
         subdomain_category = parts[0].replace("-", " ")
     return render_template("index.html", plaid_env=os.getenv("PLAID_ENV", "sandbox"),
-                           subdomain_category=subdomain_category)
+                           subdomain_category=subdomain_category,
+                           google_client_id=GOOGLE_CLIENT_ID)
 
+
+# --- Auth routes ---
+
+@app.route("/api/auth/google", methods=["POST"])
+def auth_google():
+    credential = (request.json or {}).get("credential")
+    if not credential:
+        return jsonify({"error": "Missing credential"}), 400
+
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+        idinfo = id_token.verify_oauth2_token(credential, google_requests.Request(), GOOGLE_CLIENT_ID)
+        google_id = idinfo["sub"]
+        email = idinfo.get("email", "")
+        name = idinfo.get("name", "")
+    except Exception as e:
+        return jsonify({"error": f"Invalid credential: {e}"}), 401
+
+    user = db.upsert_user(google_id, email, name)
+    old_anon_id = session.get("anon_id")
+    session["user_id"] = user["id"]
+    session.pop("anon_id", None)
+
+    # Claim anonymous data
+    if old_anon_id:
+        db.claim_anonymous_data(old_anon_id, user["id"])
+
+    return jsonify({"user": {"id": user["id"], "name": user["name"], "email": user["email"]}})
+
+
+@app.route("/api/auth/signout", methods=["POST"])
+def auth_signout():
+    session.pop("user_id", None)
+    return jsonify({"success": True})
+
+
+@app.route("/api/auth/me")
+def auth_me():
+    user_id = session.get("user_id")
+    if user_id:
+        user = db.get_user(user_id)
+        if user:
+            return jsonify({"authenticated": True, "user": {"id": user["id"], "name": user["name"], "email": user["email"]}})
+    return jsonify({"authenticated": False})
+
+
+# --- Plaid routes ---
 
 @app.route("/api/create_link_token", methods=["POST"])
 def create_link_token():
     try:
-        token = plaid_client.create_link_token()
+        uid, aid = _get_scope()
+        client_user_id = f"user-{uid}" if uid else f"anon-{aid}"
+        token = plaid_client.create_link_token(client_user_id=client_user_id)
         return jsonify({"link_token": token})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -111,9 +262,10 @@ def exchange_token():
     if not public_token:
         return jsonify({"error": "Missing public_token"}), 400
     try:
+        uid, aid = _get_scope()
         access_token, item_id = plaid_client.exchange_public_token(public_token)
         institution = request.json.get("institution_name", "Unknown")
-        db.save_linked_account(item_id, access_token, institution)
+        db.save_linked_account(item_id, access_token, institution, user_id=uid, anon_id=aid)
 
         accounts = plaid_client.get_accounts(access_token)
         accounts_data = []
@@ -125,7 +277,7 @@ def exchange_token():
                 "subtype": a.get("subtype"),
                 "balances": a.get("balances", {}),
             })
-        db.upsert_accounts(item_id, accounts_data)
+        db.upsert_accounts(item_id, accounts_data, user_id=uid, anon_id=aid)
         return jsonify({"success": True, "item_id": item_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -133,21 +285,38 @@ def exchange_token():
 
 @app.route("/api/prefetch", methods=["POST"])
 def prefetch():
-    """Pre-fetch and cache transactions right after bank connect. Called async from frontend."""
-    result, error = _get_transactions()
+    uid, aid = _get_scope()
+    result, error = _get_transactions(user_id=uid, anon_id=aid)
     if error:
         return jsonify({"error": error}), 400
     txns, insts = result
     return jsonify({"success": True, "transaction_count": len(txns), "institutions": insts})
 
 
+@app.route("/api/prefetch_all", methods=["POST"])
+def prefetch_all():
+    """Trigger background analysis of all 12 preset categories."""
+    uid, aid = _get_scope()
+    thread = threading.Thread(target=_prefetch_all_categories, args=(uid, aid), daemon=True)
+    thread.start()
+    return jsonify({"success": True, "message": "Prefetch started"})
+
+
+@app.route("/api/prefetch_status")
+def prefetch_status():
+    """Return which categories have been pre-analyzed so far."""
+    sk = _scope_key()
+    status = _prefetch_status.get(sk, {"total": len(CATEGORIES), "done": 0, "categories": [], "complete": False})
+    return jsonify(status)
+
+
 @app.route("/api/analysis")
 def analysis():
     settings = db.get_user_settings()
     category = request.args.get("category", settings["pet_name"])
+    uid, aid = _get_scope()
 
-    # Check category-specific cache
-    linked = db.get_all_access_tokens()
+    linked = db.get_all_access_tokens(user_id=uid, anon_id=aid)
     if not linked:
         return jsonify({"error": "No bank connected. Please link your account."}), 400
 
@@ -156,45 +325,22 @@ def analysis():
     if cached:
         return jsonify(cached)
 
-    # Get transactions (from cache or Plaid)
-    result, error = _get_transactions()
+    result, error = _get_transactions(user_id=uid, anon_id=aid)
     if error:
         return jsonify({"error": error}), 500
     all_transactions, institution_names = result
 
-    # Run Claude categorization (this is the main latency)
     try:
-        result = pet_categorizer.analyze_pet_spending(all_transactions, pet_name=category)
-
-        today = date.today()
-        d30 = str(today - timedelta(days=30))
-        d90 = str(today - timedelta(days=90))
-
-        total_30d = sum(t["amount"] for t in result["transactions"] if t["date"] >= d30)
-        total_90d = sum(t["amount"] for t in result["transactions"] if t["date"] >= d90)
-
-        # Detect actual data range
-        all_dates = [t["date"] for t in all_transactions if t.get("date")]
-        earliest = min(all_dates) if all_dates else str(today)
-        days_available = (today - date.fromisoformat(earliest)).days
-
-        result["total_30d"] = round(total_30d, 2)
-        result["total_90d"] = round(total_90d, 2)
-        result["total_1yr"] = result["total_spent"]
-        result["days_available"] = days_available
-        result["earliest_date"] = earliest
-        result["institutions"] = institution_names
-        result["category"] = category
-
-        db.cache_analysis(analysis_cache_key, result)
-        return jsonify(result)
+        analysis_result = _run_single_analysis(all_transactions, institution_names, category, linked, user_id=uid, anon_id=aid)
+        return jsonify(analysis_result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/institutions")
 def institutions():
-    linked = db.get_all_access_tokens()
+    uid, aid = _get_scope()
+    linked = db.get_all_access_tokens(user_id=uid, anon_id=aid)
     return jsonify([
         {"item_id": l["item_id"], "institution_name": l.get("institution_name", "Bank")}
         for l in linked
@@ -207,7 +353,8 @@ def remove_institution():
     if not item_id:
         return jsonify({"error": "Missing item_id"}), 400
 
-    linked = db.get_all_access_tokens()
+    uid, aid = _get_scope()
+    linked = db.get_all_access_tokens(user_id=uid, anon_id=aid)
     access_token = None
     for l in linked:
         if l["item_id"] == item_id:
@@ -220,7 +367,7 @@ def remove_institution():
     plaid_client.remove_item(access_token)
     db.remove_linked_account(item_id)
 
-    remaining = db.get_all_access_tokens()
+    remaining = db.get_all_access_tokens(user_id=uid, anon_id=aid)
     return jsonify({"success": True, "remaining": len(remaining)})
 
 
@@ -239,7 +386,24 @@ def settings():
 
 @app.route("/api/refresh", methods=["POST"])
 def refresh():
-    db.invalidate_cache()
+    uid, aid = _get_scope()
+    db.invalidate_cache(user_id=uid, anon_id=aid)
+    return jsonify({"success": True})
+
+
+# --- Saved categories ---
+
+@app.route("/api/saved_categories")
+def saved_categories_list():
+    uid, aid = _get_scope()
+    cats = db.get_saved_categories(user_id=uid, anon_id=aid)
+    return jsonify(cats)
+
+
+@app.route("/api/saved_categories/<int:cat_id>", methods=["DELETE"])
+def saved_categories_delete(cat_id):
+    uid, aid = _get_scope()
+    db.delete_saved_category(cat_id, user_id=uid, anon_id=aid)
     return jsonify({"success": True})
 
 
@@ -250,13 +414,16 @@ def privacy():
 
 @app.route("/api/logout", methods=["POST"])
 def logout():
-    linked = db.get_all_access_tokens()
+    uid, aid = _get_scope()
+    linked = db.get_all_access_tokens(user_id=uid, anon_id=aid)
     for link in linked:
         try:
             plaid_client.remove_item(link["access_token"])
         except Exception:
             pass
-    db.clear_all_data()
+    db.clear_all_data(user_id=uid, anon_id=aid)
+    session.pop("user_id", None)
+    session.pop("anon_id", None)
     return jsonify({"success": True})
 
 

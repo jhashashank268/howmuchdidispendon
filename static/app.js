@@ -1,28 +1,31 @@
 let analysisData = null;
 let selectedCategory = "dog";
 let bankConnected = false;
+let currentUser = null; // { id, name, email } or null
+let prefetchedCategories = new Set();
+let prefetchPollTimer = null;
 
 const CATEGORIES = [
-    { key: "dog", emoji: "🐶", label: "dog", domain: "dog.com" },
-    { key: "groceries", emoji: "🛒", label: "groceries", domain: "groceries.com" },
-    { key: "coffee", emoji: "☕", label: "coffee", domain: "coffee.com" },
-    { key: "restaurants", emoji: "🍽️", label: "restaurants", domain: "restaurants.com" },
-    { key: "rent", emoji: "🏠", label: "rent", domain: "rent.com" },
-    { key: "clothes", emoji: "👕", label: "clothes", domain: "clothes.com" },
-    { key: "rideshare", emoji: "🚗", label: "rideshare", domain: "rideshare.com" },
-    { key: "subscriptions", emoji: "📱", label: "subscriptions", domain: "subscriptions.com" },
-    { key: "travel", emoji: "✈️", label: "travel", domain: "travel.com" },
-    { key: "fitness", emoji: "💪", label: "fitness", domain: "fitness.com" },
-    { key: "fast food", emoji: "🍟", label: "fast food", domain: "fastfood.com" },
-    { key: "alcohol", emoji: "🍷", label: "alcohol", domain: "alcohol.com" },
+    { key: "dog", emoji: "\u{1F436}", label: "dog", domain: "dog.com" },
+    { key: "groceries", emoji: "\u{1F6D2}", label: "groceries", domain: "groceries.com" },
+    { key: "coffee", emoji: "\u2615", label: "coffee", domain: "coffee.com" },
+    { key: "restaurants", emoji: "\u{1F37D}\uFE0F", label: "restaurants", domain: "restaurants.com" },
+    { key: "rent", emoji: "\u{1F3E0}", label: "rent", domain: "rent.com" },
+    { key: "clothes", emoji: "\u{1F455}", label: "clothes", domain: "clothes.com" },
+    { key: "rideshare", emoji: "\u{1F697}", label: "rideshare", domain: "rideshare.com" },
+    { key: "subscriptions", emoji: "\u{1F4F1}", label: "subscriptions", domain: "subscriptions.com" },
+    { key: "travel", emoji: "\u2708\uFE0F", label: "travel", domain: "travel.com" },
+    { key: "fitness", emoji: "\u{1F4AA}", label: "fitness", domain: "fitness.com" },
+    { key: "fast food", emoji: "\u{1F35F}", label: "fast food", domain: "fastfood.com" },
+    { key: "alcohol", emoji: "\u{1F377}", label: "alcohol", domain: "alcohol.com" },
 ];
 
 const CAT_ICONS = {
-    food_treats: "🦴", health_vet: "🏥", insurance: "🛡️", grooming: "✂️",
-    supplies_toys: "🧸", boarding_daycare: "🏠", walking_sitting: "🚶",
-    training: "🎓", other_pet: "🐾",
-    food: "🍽️", transport: "🚗", shopping: "🛍️", housing: "🏠",
-    entertainment: "🎬", health: "💊", utilities: "⚡", other: "📋",
+    food_treats: "\u{1F9B4}", health_vet: "\u{1F3E5}", insurance: "\u{1F6E1}\uFE0F", grooming: "\u2702\uFE0F",
+    supplies_toys: "\u{1F9F8}", boarding_daycare: "\u{1F3E0}", walking_sitting: "\u{1F6B6}",
+    training: "\u{1F393}", other_pet: "\u{1F43E}",
+    food: "\u{1F37D}\uFE0F", transport: "\u{1F697}", shopping: "\u{1F6CD}\uFE0F", housing: "\u{1F3E0}",
+    entertainment: "\u{1F3AC}", health: "\u{1F48A}", utilities: "\u26A1", other: "\u{1F4CB}",
 };
 
 // ===== SCREENS =====
@@ -75,6 +78,81 @@ function stopRotation() {
     clearInterval(rotateTimer);
 }
 
+// ===== AUTH =====
+function initGoogleAuth() {
+    if (!window.GOOGLE_CLIENT_ID) return;
+
+    // Wait for Google GIS to load
+    const check = setInterval(() => {
+        if (window.google && google.accounts) {
+            clearInterval(check);
+            google.accounts.id.initialize({
+                client_id: window.GOOGLE_CLIENT_ID,
+                callback: handleGoogleCredential,
+            });
+            renderAuthUI();
+        }
+    }, 200);
+}
+
+async function handleGoogleCredential(response) {
+    try {
+        const resp = await fetch("/api/auth/google", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ credential: response.credential }),
+        });
+        const data = await resp.json();
+        if (data.error) { showError(data.error); return; }
+        currentUser = data.user;
+        renderAuthUI();
+        // If bank was already connected anonymously, it's now claimed
+        checkBankAndProceed();
+    } catch (e) {
+        showError("Sign-in failed: " + e.message);
+    }
+}
+
+async function signOut() {
+    await fetch("/api/auth/signout", { method: "POST" });
+    currentUser = null;
+    renderAuthUI();
+}
+
+function renderAuthUI() {
+    // Welcome screen auth
+    const welcomeAuth = document.getElementById("welcomeAuth");
+    if (welcomeAuth) {
+        if (currentUser) {
+            welcomeAuth.innerHTML = `<p class="welcome-fine" style="margin-top:10px;">signed in as ${escapeHtml(currentUser.name)} &middot; <a href="#" onclick="signOut();return false;" class="auth-link">sign out</a></p>`;
+        } else if (window.GOOGLE_CLIENT_ID) {
+            welcomeAuth.innerHTML = `<p class="welcome-fine" style="margin-top:10px;"><a href="#" onclick="triggerGoogleSignIn();return false;" class="auth-link">sign in with Google</a> to save across sessions</p>`;
+        }
+    }
+
+    // Picker header auth
+    const pickerAuth = document.getElementById("pickerAuthArea");
+    if (pickerAuth) {
+        if (currentUser) {
+            pickerAuth.innerHTML = `<span class="picker-user">${escapeHtml(currentUser.name)}</span> <a href="#" onclick="signOut();return false;" class="auth-link-small">sign out</a>`;
+        } else if (window.GOOGLE_CLIENT_ID) {
+            pickerAuth.innerHTML = `<a href="#" onclick="triggerGoogleSignIn();return false;" class="auth-link-small">sign in</a>`;
+        }
+    }
+}
+
+function triggerGoogleSignIn() {
+    if (window.google && google.accounts) {
+        google.accounts.id.prompt();
+    }
+}
+
+function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 // ===== PLAID =====
 async function startPlaidLink() {
     try {
@@ -99,8 +177,11 @@ async function startPlaidLink() {
                     bankConnected = true;
                     stopRotation();
 
-                    // Pre-fetch transactions in background while showing picker
+                    // Pre-fetch transactions in background
                     fetch("/api/prefetch", { method: "POST" });
+
+                    // Start background prefetch of all 12 categories
+                    startPrefetchAll();
 
                     showCategoryPicker();
                 } catch (e) {
@@ -115,6 +196,92 @@ async function startPlaidLink() {
     }
 }
 
+// ===== PREFETCH ALL =====
+function startPrefetchAll() {
+    fetch("/api/prefetch_all", { method: "POST" });
+    prefetchedCategories.clear();
+    pollPrefetchStatus();
+}
+
+function pollPrefetchStatus() {
+    clearInterval(prefetchPollTimer);
+    prefetchPollTimer = setInterval(async () => {
+        try {
+            const resp = await fetch("/api/prefetch_status");
+            const data = await resp.json();
+            prefetchedCategories = new Set(data.categories || []);
+
+            const el = document.getElementById("prefetchProgress");
+            const txt = document.getElementById("prefetchText");
+            if (data.complete || data.done >= data.total) {
+                el.style.display = "none";
+                clearInterval(prefetchPollTimer);
+            } else if (data.done > 0) {
+                el.style.display = "block";
+                txt.textContent = `analyzing ${data.done}/${data.total} categories...`;
+            } else {
+                el.style.display = "block";
+                txt.textContent = "starting analysis...";
+            }
+
+            // Update saved categories display
+            loadSavedCategories();
+        } catch (e) {
+            clearInterval(prefetchPollTimer);
+        }
+    }, 3000);
+}
+
+// ===== SAVED CATEGORIES =====
+async function loadSavedCategories() {
+    try {
+        const resp = await fetch("/api/saved_categories");
+        const cats = await resp.json();
+        const section = document.getElementById("savedCategoriesSection");
+        const container = document.getElementById("savedCards");
+
+        if (!cats || cats.length === 0) {
+            section.style.display = "none";
+            return;
+        }
+
+        section.style.display = "block";
+        container.innerHTML = cats.map(cat => {
+            const catObj = CATEGORIES.find(c => c.key === cat.category);
+            const emoji = cat.emoji || (catObj ? catObj.emoji : "\u{1F50D}");
+            const total = cat.last_total != null ? fmt(cat.last_total) : "--";
+
+            let changeHtml = "";
+            if (cat.previous_total != null && cat.previous_total > 0 && cat.last_total != null) {
+                const pctChange = ((cat.last_total - cat.previous_total) / cat.previous_total) * 100;
+                const arrow = pctChange >= 0 ? "\u2191" : "\u2193";
+                const cls = pctChange >= 0 ? "change-up" : "change-down";
+                changeHtml = `<span class="saved-change ${cls}">${arrow}${Math.abs(pctChange).toFixed(0)}%</span>`;
+            }
+
+            return `
+                <div class="saved-card" onclick="analyzeSaved('${escapeHtml(cat.category)}')">
+                    <button class="saved-remove" onclick="event.stopPropagation();removeSaved(${cat.id})">&times;</button>
+                    <div class="saved-emoji">${emoji}</div>
+                    <div class="saved-name">${escapeHtml(cat.category)}</div>
+                    <div class="saved-total">${total}</div>
+                    ${changeHtml}
+                </div>`;
+        }).join("");
+    } catch (e) {}
+}
+
+function analyzeSaved(category) {
+    selectedCategory = category;
+    clearInterval(carouselTimer);
+    runAnalysis();
+}
+
+async function removeSaved(id) {
+    await fetch(`/api/saved_categories/${id}`, { method: "DELETE" });
+    loadSavedCategories();
+}
+
 // ===== CATEGORY PICKER (CAROUSEL) =====
 let carouselIdx = 0;
 let carouselTimer = null;
@@ -125,6 +292,8 @@ function showCategoryPicker() {
     carouselPaused = false;
     updateCarouselDisplay();
     startCarousel();
+    renderAuthUI();
+    loadSavedCategories();
 
     document.getElementById("customCategory").addEventListener("keydown", e => {
         if (e.key === "Enter") analyzeCustom();
@@ -153,17 +322,16 @@ function startCarousel() {
 function updateCarouselDisplay() {
     const cat = CATEGORIES[carouselIdx];
     document.getElementById("carouselEmoji").textContent = cat.emoji;
-    document.getElementById("carouselWord").innerHTML = cat.label + '<span class="carousel-dot">.com</span>';
+    const checkmark = prefetchedCategories.has(cat.key) ? ' <span class="prefetch-check">\u2713</span>' : "";
+    document.getElementById("carouselWord").innerHTML = cat.label + '<span class="carousel-dot">.com</span>' + checkmark;
 }
 
 function selectCarousel() {
     if (!carouselPaused) {
-        // First tap: pause
         carouselPaused = true;
         document.getElementById("carouselHint").textContent = "tap again to analyze";
         document.getElementById("carouselHint").classList.add("paused");
     } else {
-        // Second tap: go
         selectedCategory = CATEGORIES[carouselIdx].key;
         clearInterval(carouselTimer);
         runAnalysis();
@@ -247,14 +415,12 @@ function renderResults(data) {
     const stack = document.querySelector(".results-stack");
 
     if (days <= 35) {
-        // Only ~30 days of data — show single number
         stack.innerHTML = `
             <div class="result-row row-1yr">
                 <span class="row-amount">${fmt(data.total_1yr || 0)}</span>
                 <span class="row-label">last ${days} days</span>
             </div>`;
     } else if (days <= 95) {
-        // ~90 days — show 30d and total
         stack.innerHTML = `
             <div class="result-row row-30">
                 <span class="row-amount">${fmt(data.total_30d || 0)}</span>
@@ -265,7 +431,6 @@ function renderResults(data) {
                 <span class="row-label">last ${days} days</span>
             </div>`;
     } else {
-        // Full data — show all three
         stack.innerHTML = `
             <div class="result-row row-30">
                 <span class="row-amount" id="amt30">${fmt(data.total_30d || 0)}</span>
@@ -285,9 +450,9 @@ function renderResults(data) {
     const emoji = catObj ? catObj.emoji + " " : "";
     document.getElementById("resultsOn").innerHTML = `on ${emoji}${selectedCategory}<span class="dim">.com</span>`;
 
-    let metaText = `${data.transaction_count} transactions · ${data.total_transactions_analyzed} analyzed`;
+    let metaText = `${data.transaction_count} transactions \u00B7 ${data.total_transactions_analyzed} analyzed`;
     if (days < 90) {
-        metaText += ` · ${days} days of bank history available`;
+        metaText += ` \u00B7 ${days} days of bank history available`;
     }
     document.getElementById("resultsMeta").textContent = metaText;
 
@@ -304,7 +469,7 @@ function renderSections(categories) {
 
     container.innerHTML = categories.map((cat, idx) => {
         const key = findCatKey(cat.label);
-        const icon = CAT_ICONS[key] || "📋";
+        const icon = CAT_ICONS[key] || "\u{1F4CB}";
 
         const rows = (cat.transactions || []).map(txn => {
             const d = txn.date
@@ -314,7 +479,7 @@ function renderSections(categories) {
                 <div class="txn-row">
                     <div class="txn-info">
                         <div class="txn-name">${txn.name}</div>
-                        <div class="txn-detail">${d}${txn.merchant_name ? " · " + txn.merchant_name : ""}</div>
+                        <div class="txn-detail">${d}${txn.merchant_name ? " \u00B7 " + txn.merchant_name : ""}</div>
                     </div>
                     <div class="txn-amount">${fmtD(txn.amount)}</div>
                 </div>`;
@@ -330,7 +495,7 @@ function renderSections(categories) {
                     <div class="txn-section-right">
                         <span class="txn-section-total">${fmt(cat.total)}</span>
                         <span class="txn-section-count">${cat.count}</span>
-                        <span class="txn-chevron">›</span>
+                        <span class="txn-chevron">\u203A</span>
                     </div>
                 </div>
                 <div class="txn-section-body">${rows}</div>
@@ -358,6 +523,7 @@ function goBack() {
     document.getElementById("carouselHint").textContent = "tap to select";
     document.getElementById("carouselHint").classList.remove("paused");
     startCarousel();
+    loadSavedCategories();
     showScreen("picker");
 }
 
@@ -367,38 +533,66 @@ async function doLogout() {
     await fetch("/api/logout", { method: "POST" });
     analysisData = null;
     bankConnected = false;
+    currentUser = null;
+    prefetchedCategories.clear();
+    clearInterval(prefetchPollTimer);
+    renderAuthUI();
     showScreen("welcome");
     startRotation();
 }
 
 // ===== INIT =====
-(async function init() {
-    const subCat = window.SUBDOMAIN_CATEGORY;
-
-    // If subdomain category, set it as selected and update welcome screen text
-    if (subCat) {
-        selectedCategory = subCat;
-        const catObj = CATEGORIES.find(c => c.key === subCat);
-        const wordEl = document.getElementById("rotatingWord");
-        const emojiEl = document.getElementById("rotatingEmoji");
-        if (wordEl) wordEl.textContent = subCat;
-        if (emojiEl) emojiEl.textContent = catObj ? catObj.emoji : "🔍";
-    }
-
-    if (!subCat) startRotation();
-
+async function checkBankAndProceed() {
     try {
         const resp = await fetch("/api/institutions");
         const institutions = await resp.json();
         if (institutions.length > 0) {
             bankConnected = true;
             stopRotation();
+            // Start prefetch if not already running
+            startPrefetchAll();
+            const subCat = window.SUBDOMAIN_CATEGORY;
             if (subCat) {
-                // Auto-analyze the subdomain category
+                selectedCategory = subCat;
                 runAnalysis();
             } else {
                 showCategoryPicker();
             }
+            return true;
         }
     } catch (e) {}
+    return false;
+}
+
+(async function init() {
+    const subCat = window.SUBDOMAIN_CATEGORY;
+
+    if (subCat) {
+        selectedCategory = subCat;
+        const catObj = CATEGORIES.find(c => c.key === subCat);
+        const wordEl = document.getElementById("rotatingWord");
+        const emojiEl = document.getElementById("rotatingEmoji");
+        if (wordEl) wordEl.textContent = subCat;
+        if (emojiEl) emojiEl.textContent = catObj ? catObj.emoji : "\u{1F50D}";
+    }
+
+    if (!subCat) startRotation();
+
+    // Check auth state
+    try {
+        const authResp = await fetch("/api/auth/me");
+        const authData = await authResp.json();
+        if (authData.authenticated) {
+            currentUser = authData.user;
+        }
+    } catch (e) {}
+
+    initGoogleAuth();
+    renderAuthUI();
+
+    // Check if bank is already connected
+    const hasBanks = await checkBankAndProceed();
+    if (!hasBanks && subCat) {
+        // No bank but subdomain — stay on welcome
+    }
 })();

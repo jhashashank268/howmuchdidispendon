@@ -11,6 +11,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    {% if google_client_id %}
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    {% endif %}
 </head>
 <body>
 
@@ -19,14 +22,15 @@
         <div class="welcome-wrap">
             <div class="welcome-top">
                 <p class="welcome-pre">how much did i spend on</p>
-                <div class="rotating-emoji" id="rotatingEmoji">🐶</div>
+                <div class="rotating-emoji" id="rotatingEmoji">&#x1f436;</div>
                 <div class="rotating-wrap">
                     <span class="rotating-word" id="rotatingWord">dog</span><span class="dot-com">.com</span>
                 </div>
             </div>
             <div class="welcome-bottom">
                 <button class="btn-main" onclick="startPlaidLink()">connect your bank</button>
-                <p class="welcome-fine">read-only via plaid · we never store credentials</p>
+                <p class="welcome-fine">read-only via plaid &middot; we never store credentials</p>
+                <div id="welcomeAuth" class="welcome-auth"></div>
                 <p class="welcome-fine" style="margin-top:6px;opacity:0.5;">designed in a coffee shop by shashank</p>
             </div>
         </div>
@@ -35,22 +39,37 @@
     <!-- ========== CATEGORY PICKER ========== -->
     <div id="picker" class="screen">
         <div class="picker-header">
-            <span></span>
-            <button class="btn-text-danger" onclick="doLogout()">logout</button>
+            <div class="picker-header-left" id="pickerAuthArea"></div>
+            <button class="btn-text-danger" onclick="doLogout()">disconnect bank</button>
         </div>
+
+        <!-- Saved Categories -->
+        <div id="savedCategoriesSection" class="saved-section" style="display:none;">
+            <div class="saved-header">
+                <span class="saved-title">my categories</span>
+            </div>
+            <div class="saved-cards" id="savedCards"></div>
+        </div>
+
         <div class="picker-wrap">
             <p class="picker-pre">how much did i spend on</p>
             <div class="carousel-area" id="carouselArea" onclick="selectCarousel()">
-                <div class="carousel-emoji" id="carouselEmoji">🐶</div>
+                <div class="carousel-emoji" id="carouselEmoji">&#x1f436;</div>
                 <div class="carousel-word" id="carouselWord">dog<span class="carousel-dot">.com</span></div>
                 <p class="carousel-hint" id="carouselHint">tap to select</p>
             </div>
+
+            <!-- Prefetch progress -->
+            <div id="prefetchProgress" class="prefetch-progress" style="display:none;">
+                <span id="prefetchText"></span>
+            </div>
+
             <div class="picker-divider">
                 <span class="picker-or">or</span>
             </div>
             <div class="picker-custom">
                 <input type="text" id="customCategory" class="picker-input" placeholder="type anything...">
-                <button class="btn-go" onclick="analyzeCustom()">go →</button>
+                <button class="btn-go" onclick="analyzeCustom()">go &rarr;</button>
             </div>
         </div>
     </div>
@@ -69,8 +88,8 @@
     <!-- ========== RESULTS ========== -->
     <div id="results" class="screen">
         <div class="results-header">
-            <button class="btn-back" onclick="goBack()">← back</button>
-            <button class="btn-text-danger" onclick="doLogout()">logout</button>
+            <button class="btn-back" onclick="goBack()">&larr; back</button>
+            <button class="btn-text-danger" onclick="doLogout()">disconnect bank</button>
         </div>
 
         <div class="results-body">
@@ -102,7 +121,10 @@
     </div>
 
     <div id="errorBox" class="error-toast"></div>
-    <script>window.SUBDOMAIN_CATEGORY = {{ subdomain_category|tojson }};</script>
+    <script>
+        window.SUBDOMAIN_CATEGORY = {{ subdomain_category|tojson }};
+        window.GOOGLE_CLIENT_ID = {{ google_client_id|tojson }};
+    </script>
     <script src="/static/app.js"></script>
 </body>
 </html>
