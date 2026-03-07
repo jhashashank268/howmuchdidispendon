@@ -86,7 +86,14 @@ def _get_transactions():
 
 @app.route("/")
 def index():
-    return render_template("index.html", plaid_env=os.getenv("PLAID_ENV", "sandbox"))
+    # Detect subdomain category (e.g., dog.howmuchdidispendon.com)
+    host = request.host.split(":")[0]  # strip port
+    parts = host.split(".")
+    subdomain_category = None
+    if len(parts) > 2 and parts[0] not in ("www", ""):
+        subdomain_category = parts[0].replace("-", " ")
+    return render_template("index.html", plaid_env=os.getenv("PLAID_ENV", "sandbox"),
+                           subdomain_category=subdomain_category)
 
 
 @app.route("/api/create_link_token", methods=["POST"])

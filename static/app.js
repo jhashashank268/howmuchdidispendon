@@ -373,7 +373,19 @@ async function doLogout() {
 
 // ===== INIT =====
 (async function init() {
-    startRotation();
+    const subCat = window.SUBDOMAIN_CATEGORY;
+
+    // If subdomain category, set it as selected and update welcome screen text
+    if (subCat) {
+        selectedCategory = subCat;
+        const catObj = CATEGORIES.find(c => c.key === subCat);
+        const wordEl = document.getElementById("rotatingWord");
+        const emojiEl = document.getElementById("rotatingEmoji");
+        if (wordEl) wordEl.textContent = subCat;
+        if (emojiEl) emojiEl.textContent = catObj ? catObj.emoji : "🔍";
+    }
+
+    if (!subCat) startRotation();
 
     try {
         const resp = await fetch("/api/institutions");
@@ -381,7 +393,12 @@ async function doLogout() {
         if (institutions.length > 0) {
             bankConnected = true;
             stopRotation();
-            showCategoryPicker();
+            if (subCat) {
+                // Auto-analyze the subdomain category
+                runAnalysis();
+            } else {
+                showCategoryPicker();
+            }
         }
     } catch (e) {}
 })();
