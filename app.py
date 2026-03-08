@@ -151,11 +151,6 @@ def _run_single_analysis(all_transactions, institution_names, category, linked, 
 
     db.cache_analysis(analysis_cache_key, result, user_id=user_id, anon_id=anon_id)
 
-    # Auto-save category
-    cat_obj = next((c for c in CATEGORIES if c["key"] == category), None)
-    emoji = cat_obj["emoji"] if cat_obj else None
-    db.upsert_saved_category(category, emoji, result["total_1yr"], user_id=user_id, anon_id=anon_id)
-
     return result
 
 
@@ -398,6 +393,19 @@ def saved_categories_list():
     uid, aid = _get_scope()
     cats = db.get_saved_categories(user_id=uid, anon_id=aid)
     return jsonify(cats)
+
+
+@app.route("/api/saved_categories", methods=["POST"])
+def saved_categories_create():
+    data = request.json or {}
+    category = data.get("category", "").strip()
+    if not category:
+        return jsonify({"error": "Missing category"}), 400
+    emoji = data.get("emoji")
+    total = data.get("total")
+    uid, aid = _get_scope()
+    db.upsert_saved_category(category, emoji, total, user_id=uid, anon_id=aid)
+    return jsonify({"success": True})
 
 
 @app.route("/api/saved_categories/<int:cat_id>", methods=["DELETE"])

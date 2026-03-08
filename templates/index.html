@@ -41,7 +41,15 @@
     <div id="picker" class="screen">
         <div class="picker-header">
             <div class="picker-header-left" id="pickerAuthArea"></div>
-            <button class="btn-text-danger" onclick="doLogout()">disconnect bank</button>
+            <button class="btn-text-small" onclick="addMoreAccounts()">+ add account</button>
+        </div>
+
+        <!-- Connected accounts -->
+        <div id="connectedAccountsSection" class="connected-section" style="display:none;">
+            <div class="connected-header">
+                <span class="saved-title">connected accounts</span>
+            </div>
+            <div class="connected-list" id="connectedList"></div>
         </div>
 
         <!-- Saved Categories -->
@@ -113,6 +121,8 @@
 
             <p class="results-on" id="resultsOn">on dog.com</p>
             <p class="results-meta" id="resultsMeta"></p>
+
+            <button class="btn-track" id="trackBtn" onclick="trackCategory()">track this</button>
 
             <!-- Expandable categories -->
             <div class="txn-sections" id="txnSections"></div>

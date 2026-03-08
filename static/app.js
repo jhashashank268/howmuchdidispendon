@@ -319,6 +319,7 @@ function showCategoryPicker() {
     startCarousel();
     renderAuthUI();
     loadSavedCategories();
+    loadConnectedAccounts();
 
     document.getElementById("customCategory").addEventListener("keydown", e => {
         if (e.key === "Enter") analyzeCustom();
@@ -347,8 +348,7 @@ function startCarousel() {
 function updateCarouselDisplay() {
     const cat = CATEGORIES[carouselIdx];
     document.getElementById("carouselEmoji").textContent = cat.emoji;
-    const checkmark = prefetchedCategories.has(cat.key) ? ' <span class="prefetch-check">\u2713</span>' : "";
-    document.getElementById("carouselWord").innerHTML = cat.label + '<span class="carousel-dot">.com</span>' + checkmark;
+    document.getElementById("carouselWord").innerHTML = cat.label + '<span class="carousel-dot">.com</span>';
 }
 
 function selectCarousel() {
@@ -379,7 +379,7 @@ function animateProgress() {
     const msg = document.getElementById("loadingMsg");
     const catObj = CATEGORIES.find(c => c.key === selectedCategory);
     const emoji = catObj ? catObj.emoji + " " : "";
-    document.getElementById("loadingWord").innerHTML = emoji + selectedCategory + '<span class="dim">.com</span>';
+    document.getElementById("loadingWord").innerHTML = emoji + escapeHtml(selectedCategory) + '<span class="dot-com">.com</span>';
     let pct = 0;
     const steps = [
         [10, "checking cache..."],
@@ -426,6 +426,11 @@ async function runAnalysis() {
 
         analysisData = data;
         renderResults(data);
+        // Reset track button
+        const trackBtn = document.getElementById("trackBtn");
+        trackBtn.textContent = "track this";
+        trackBtn.disabled = false;
+        trackBtn.classList.remove("tracked");
         showScreen("results");
     } catch (e) {
         stopProgress();
@@ -549,7 +554,81 @@ function goBack() {
     document.getElementById("carouselHint").classList.remove("paused");
     startCarousel();
     loadSavedCategories();
+    loadConnectedAccounts();
     showScreen("picker");
+}
+
+// ===== TRACK CATEGORY =====
+async function trackCategory() {
+    if (!analysisData) return;
+    const catObj = CATEGORIES.find(c => c.key === selectedCategory);
+    const emoji = catObj ? catObj.emoji : null;
+    try {
+        await fetch("/api/saved_categories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                category: selectedCategory,
+                emoji: emoji,
+                total: analysisData.total_1yr || 0,
+            }),
+        });
+        const btn = document.getElementById("trackBtn");
+        btn.textContent = "tracking \u2713";
+        btn.disabled = true;
+        btn.classList.add("tracked");
+    } catch (e) {
+        showError("Failed to save: " + e.message);
+    }
+}
+
+// ===== CONNECTED ACCOUNTS =====
+async function loadConnectedAccounts() {
+    try {
+        const resp = await fetch("/api/institutions");
+        const institutions = await resp.json();
+        const section = document.getElementById("connectedAccountsSection");
+        const list = document.getElementById("connectedList");
+        if (!institutions || institutions.length === 0) {
+            section.style.display = "none";
+            return;
+        }
+        section.style.display = "block";
+        list.innerHTML = institutions.map(inst => `
+            <div class="connected-item">
+                <span class="connected-name">${escapeHtml(inst.institution_name)}</span>
+                <button class="btn-remove" onclick="removeAccount('${escapeHtml(inst.item_id)}')">&times;</button>
+            </div>`).join("");
+    } catch (e) {}
+}
+
+async function removeAccount(itemId) {
+    if (!confirm("Remove this account?")) return;
+    try {
+        const resp = await fetch("/api/remove_institution", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ item_id: itemId }),
+        });
+        const data = await resp.json();
+        if (data.error) { showError(data.error); return; }
+        if (data.remaining === 0) {
+            bankConnected = false;
+            showScreen("welcome");
+            startRotation();
+            renderAuthUI();
+            return;
+        }
+        loadConnectedAccounts();
+        // Invalidate cache since accounts changed
+        fetch("/api/refresh", { method: "POST" });
+    } catch (e) {
+        showError("Failed to remove: " + e.message);
+    }
+}
+
+function addMoreAccounts() {
+    startPlaidLink();
 }
 
 // ===== LOGOUT =====
