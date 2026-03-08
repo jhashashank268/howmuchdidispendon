@@ -202,12 +202,6 @@ async function startPlaidLink() {
                     bankConnected = true;
                     stopRotation();
 
-                    // Pre-fetch transactions in background
-                    fetch("/api/prefetch", { method: "POST" });
-
-                    // Start background prefetch of all 12 categories
-                    startPrefetchAll();
-
                     showCategoryPicker();
                 } catch (e) {
                     showError("Failed to connect: " + e.message);
@@ -654,8 +648,6 @@ async function checkBankAndProceed() {
         if (institutions.length > 0) {
             bankConnected = true;
             stopRotation();
-            // Start prefetch if not already running
-            startPrefetchAll();
             const subCat = window.SUBDOMAIN_CATEGORY;
             if (subCat) {
                 selectedCategory = subCat;
