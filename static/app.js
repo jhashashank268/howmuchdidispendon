@@ -117,6 +117,7 @@ async function handleGoogleCredential(response) {
 async function signOut() {
     await fetch("/api/auth/signout", { method: "POST" });
     currentUser = null;
+    renderGoogleButton();
     renderAuthUI();
 }
 
@@ -128,6 +129,7 @@ function renderGoogleButton() {
         theme: "outline",
         size: "large",
         shape: "pill",
+        width: 300,
     });
 }
 
