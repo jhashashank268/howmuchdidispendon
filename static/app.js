@@ -90,6 +90,7 @@ function initGoogleAuth() {
                 client_id: window.GOOGLE_CLIENT_ID,
                 callback: handleGoogleCredential,
             });
+            renderGoogleButton();
             renderAuthUI();
         }
     }, 200);
@@ -119,15 +120,36 @@ async function signOut() {
     renderAuthUI();
 }
 
+function renderGoogleButton() {
+    const container = document.getElementById("googleSignInBtn");
+    if (!container || !window.google || !google.accounts) return;
+    container.innerHTML = "";
+    google.accounts.id.renderButton(container, {
+        theme: "outline",
+        size: "large",
+        shape: "pill",
+    });
+}
+
 function renderAuthUI() {
-    // Welcome screen auth
+    // Welcome screen auth — toggle Google button vs bank button
+    const googleBtn = document.getElementById("googleSignInBtn");
+    const bankBtn = document.getElementById("connectBankBtn");
+    const plaidNote = document.getElementById("welcomePlaidNote");
     const welcomeAuth = document.getElementById("welcomeAuth");
-    if (welcomeAuth) {
-        if (currentUser) {
+
+    if (currentUser) {
+        if (googleBtn) googleBtn.style.display = "none";
+        if (bankBtn) bankBtn.style.display = "block";
+        if (plaidNote) plaidNote.style.display = "block";
+        if (welcomeAuth) {
             welcomeAuth.innerHTML = `<p class="welcome-fine" style="margin-top:10px;">signed in as ${escapeHtml(currentUser.name)} &middot; <a href="#" onclick="signOut();return false;" class="auth-link">sign out</a></p>`;
-        } else if (window.GOOGLE_CLIENT_ID) {
-            welcomeAuth.innerHTML = `<p class="welcome-fine" style="margin-top:10px;"><a href="#" onclick="triggerGoogleSignIn();return false;" class="auth-link">sign in with Google</a> to save across sessions</p>`;
         }
+    } else {
+        if (googleBtn) googleBtn.style.display = "flex";
+        if (bankBtn) bankBtn.style.display = "none";
+        if (plaidNote) plaidNote.style.display = "none";
+        if (welcomeAuth) welcomeAuth.innerHTML = "";
     }
 
     // Picker header auth
@@ -155,6 +177,7 @@ function escapeHtml(str) {
 
 // ===== PLAID =====
 async function startPlaidLink() {
+    if (!currentUser) { showError("Please sign in with Google first"); return; }
     try {
         const resp = await fetch("/api/create_link_token", { method: "POST" });
         const data = await resp.json();
@@ -536,6 +559,7 @@ async function doLogout() {
     currentUser = null;
     prefetchedCategories.clear();
     clearInterval(prefetchPollTimer);
+    renderGoogleButton();
     renderAuthUI();
     showScreen("welcome");
     startRotation();
