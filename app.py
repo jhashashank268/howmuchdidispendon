@@ -426,6 +426,48 @@ def saved_categories_delete(cat_id):
     return jsonify({"success": True})
 
 
+@app.route("/api/debug/location_sample")
+def debug_location_sample():
+    """Show a sample of transactions with their location data to verify Plaid provides it."""
+    uid, aid = _get_scope()
+    # Force fresh fetch (skip cache) to see raw Plaid location data
+    linked = db.get_all_access_tokens(user_id=uid, anon_id=aid)
+    if not linked:
+        return jsonify({"error": "No bank connected"}), 400
+    try:
+        access_token = linked[0]["access_token"]
+        transactions = plaid_client.get_transactions(access_token, days=90)
+        sample = []
+        for t in transactions[:50]:
+            loc = t.get("location") or {}
+            if not isinstance(loc, dict):
+                loc = {}
+            sample.append({
+                "name": t.get("name") or "",
+                "merchant_name": t.get("merchant_name") or "",
+                "amount": t.get("amount", 0),
+                "date": str(t.get("date", "")),
+                "location": {
+                    "city": loc.get("city") or "",
+                    "region": loc.get("region") or "",
+                    "country": loc.get("country") or "",
+                    "address": loc.get("address") or "",
+                    "postal_code": loc.get("postal_code") or "",
+                    "lat": loc.get("lat"),
+                    "lon": loc.get("lon"),
+                },
+            })
+        has_location = sum(1 for s in sample if s["location"]["city"])
+        return jsonify({
+            "total_sampled": len(sample),
+            "with_city": has_location,
+            "without_city": len(sample) - has_location,
+            "transactions": sample,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/privacy")
 def privacy():
     return render_template("privacy.html")
