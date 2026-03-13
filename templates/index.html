@@ -50,10 +50,11 @@
         </div>
     </div>
 
-    <!-- ========== CATEGORY PICKER ========== -->
+    <!-- ========== HOME ========== -->
     <div id="picker" class="screen">
-        <div class="picker-header">
-            <div class="picker-header-left" id="pickerAuthArea"></div>
+        <div class="home-header">
+            <div class="home-greeting" id="homeGreeting"></div>
+            <a href="#" onclick="signOut();return false;" class="auth-link-small" id="homeSignOut" style="display:none;">sign out</a>
         </div>
 
         <!-- Connected accounts -->
@@ -61,34 +62,50 @@
             <div class="connected-inline" id="connectedList"></div>
         </div>
 
-        <!-- Saved Categories -->
-        <div id="savedCategoriesSection" class="saved-section" style="display:none;">
-            <div class="saved-header">
-                <span class="saved-title">my categories</span>
+        <!-- Dashboard (shown when saved categories exist) -->
+        <div id="dashboardSection" class="dashboard-section" style="display:none;">
+            <div class="dashboard-header">
+                <span class="dashboard-title">my spending</span>
+                <span class="dashboard-period">last 30 days</span>
             </div>
-            <div class="saved-cards" id="savedCards"></div>
+            <div class="dashboard-summary" id="dashboardSummary"></div>
+            <div class="dashboard-cards" id="dashboardCards"></div>
         </div>
 
-        <div class="picker-wrap">
-            <p class="picker-pre">how much did i spend on</p>
-            <div class="carousel-area" id="carouselArea" onclick="selectCarousel()">
-                <div class="carousel-emoji" id="carouselEmoji">&#x1f436;</div>
-                <div class="carousel-word" id="carouselWord">dog</div>
-                <p class="carousel-hint" id="carouselHint">tap to select</p>
+        <!-- Explore section -->
+        <div class="explore-section" id="exploreSection">
+            <div id="exploreDividerTop" class="explore-divider" style="display:none;">
+                <span>explore something new</span>
             </div>
 
-            <!-- Prefetch progress -->
-            <div id="prefetchProgress" class="prefetch-progress" style="display:none;">
-                <span id="prefetchText"></span>
-            </div>
+            <div class="picker-wrap" id="pickerWrap">
+                <p class="picker-pre">how much did i spend on</p>
+                <div class="carousel-area" id="carouselArea" onclick="selectCarousel()">
+                    <div class="carousel-emoji" id="carouselEmoji">&#x1f436;</div>
+                    <div class="carousel-word" id="carouselWord">dog</div>
+                    <p class="carousel-hint" id="carouselHint">tap to select</p>
+                </div>
 
-            <div class="picker-divider">
-                <span class="picker-or">or</span>
+                <!-- Prefetch progress -->
+                <div id="prefetchProgress" class="prefetch-progress" style="display:none;">
+                    <span id="prefetchText"></span>
+                </div>
+
+                <div class="picker-divider">
+                    <span class="picker-or">or</span>
+                </div>
+                <div class="picker-custom">
+                    <input type="text" id="customCategory" class="picker-input" placeholder="type anything...">
+                    <button class="btn-go" onclick="analyzeCustom()">go &rarr;</button>
+                </div>
+
+                <p class="dashboard-tip" id="dashboardTip" style="display:none;">tip: tap &lsquo;track this&rsquo; on any result to build your dashboard</p>
             </div>
-            <div class="picker-custom">
-                <input type="text" id="customCategory" class="picker-input" placeholder="type anything...">
-                <button class="btn-go" onclick="analyzeCustom()">go &rarr;</button>
-            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="home-footer">
+            <button class="btn-text-danger" onclick="doLogout()">disconnect bank</button>
         </div>
     </div>
 
@@ -106,8 +123,7 @@
     <!-- ========== RESULTS ========== -->
     <div id="results" class="screen">
         <div class="results-header">
-            <button class="btn-back" onclick="goBack()">&larr; back</button>
-            <button class="btn-text-danger" onclick="doLogout()">disconnect bank</button>
+            <button class="btn-back" onclick="goHome()">&larr; home</button>
         </div>
 
         <div class="results-body">
@@ -136,7 +152,7 @@
             <!-- Expandable categories -->
             <div class="txn-sections" id="txnSections"></div>
 
-            <button class="btn-secondary" onclick="goBack()" style="margin-top:20px;">ask something else</button>
+            <button class="btn-secondary" onclick="goHome()" style="margin-top:20px;">back to home</button>
         </div>
     </div>
 

@@ -160,15 +160,6 @@ function renderAuthUI() {
         if (welcomeAuth) welcomeAuth.innerHTML = "";
     }
 
-    // Picker header auth
-    const pickerAuth = document.getElementById("pickerAuthArea");
-    if (pickerAuth) {
-        if (currentUser) {
-            pickerAuth.innerHTML = `<span class="picker-user">${escapeHtml(currentUser.name)}</span> <a href="#" onclick="signOut();return false;" class="auth-link-small">sign out</a>`;
-        } else if (window.GOOGLE_CLIENT_ID) {
-            pickerAuth.innerHTML = `<a href="#" onclick="triggerGoogleSignIn();return false;" class="auth-link-small">sign in</a>`;
-        }
-    }
 }
 
 function triggerGoogleSignIn() {
@@ -257,44 +248,94 @@ function pollPrefetchStatus() {
     }, 3000);
 }
 
-// ===== SAVED CATEGORIES =====
+// ===== SAVED CATEGORIES / DASHBOARD =====
+let savedCategoriesList = []; // cached for tracking detection
+
 async function loadSavedCategories() {
     try {
         const resp = await fetch("/api/saved_categories");
         const cats = await resp.json();
-        const section = document.getElementById("savedCategoriesSection");
-        const container = document.getElementById("savedCards");
+        savedCategoriesList = cats || [];
+        renderDashboard(savedCategoriesList);
+    } catch (e) {}
+}
 
-        if (!cats || cats.length === 0) {
-            section.style.display = "none";
-            return;
+function renderDashboard(cats) {
+    const section = document.getElementById("dashboardSection");
+    const cardsContainer = document.getElementById("dashboardCards");
+    const summaryEl = document.getElementById("dashboardSummary");
+    const exploreDivider = document.getElementById("exploreDividerTop");
+    const tipEl = document.getElementById("dashboardTip");
+    const pickerWrap = document.getElementById("pickerWrap");
+
+    if (!cats || cats.length === 0) {
+        section.style.display = "none";
+        exploreDivider.style.display = "none";
+        if (tipEl) tipEl.style.display = "block";
+        // Carousel is hero — center it
+        pickerWrap.classList.add("picker-wrap-hero");
+        return;
+    }
+
+    section.style.display = "block";
+    exploreDivider.style.display = "flex";
+    if (tipEl) tipEl.style.display = "none";
+    pickerWrap.classList.remove("picker-wrap-hero");
+
+    // Compute total and aggregate MoM
+    let totalTracked = 0;
+    let totalPrevious = 0;
+    let hasPrevious = false;
+    cats.forEach(cat => {
+        if (cat.last_total != null) totalTracked += cat.last_total;
+        if (cat.previous_total != null && cat.previous_total > 0) {
+            totalPrevious += cat.previous_total;
+            hasPrevious = true;
+        }
+    });
+
+    let momHtml = "";
+    if (hasPrevious && totalPrevious > 0) {
+        const pct = ((totalTracked - totalPrevious) / totalPrevious) * 100;
+        const arrow = pct >= 0 ? "\u2191" : "\u2193";
+        const cls = pct >= 0 ? "change-up" : "change-down";
+        momHtml = `<span class="summary-change ${cls}">${arrow}${Math.abs(pct).toFixed(0)}% vs last month</span>`;
+    }
+
+    summaryEl.innerHTML = `
+        <div class="summary-row">
+            <span class="summary-label">total tracked</span>
+            <span class="summary-amount">${fmt(totalTracked)}</span>
+        </div>
+        ${momHtml}`;
+
+    cardsContainer.innerHTML = cats.map(cat => {
+        const catObj = CATEGORIES.find(c => c.key === cat.category);
+        const cachedEmoji = analysisCache[cat.category]?.emoji;
+        const emoji = cat.emoji || cachedEmoji || (catObj ? catObj.emoji : "\u{1F50D}");
+        const total = cat.last_total != null ? fmt(cat.last_total) : "--";
+
+        let changeHtml = "";
+        if (cat.previous_total != null && cat.previous_total > 0 && cat.last_total != null) {
+            const pctChange = ((cat.last_total - cat.previous_total) / cat.previous_total) * 100;
+            const arrow = pctChange >= 0 ? "\u2191" : "\u2193";
+            const cls = pctChange >= 0 ? "change-up" : "change-down";
+            changeHtml = `<span class="dash-card-change ${cls}">${arrow}${Math.abs(pctChange).toFixed(0)}% mom</span>`;
         }
 
-        section.style.display = "block";
-        container.innerHTML = cats.map(cat => {
-            const catObj = CATEGORIES.find(c => c.key === cat.category);
-            const cachedEmoji = analysisCache[cat.category]?.emoji;
-            const emoji = cat.emoji || cachedEmoji || (catObj ? catObj.emoji : "\u{1F50D}");
-            const total = cat.last_total != null ? fmt(cat.last_total) : "--";
-
-            let changeHtml = "";
-            if (cat.previous_total != null && cat.previous_total > 0 && cat.last_total != null) {
-                const pctChange = ((cat.last_total - cat.previous_total) / cat.previous_total) * 100;
-                const arrow = pctChange >= 0 ? "\u2191" : "\u2193";
-                const cls = pctChange >= 0 ? "change-up" : "change-down";
-                changeHtml = `<span class="saved-change ${cls}">${arrow}${Math.abs(pctChange).toFixed(0)}% vs prior 30d</span>`;
-            }
-
-            return `
-                <div class="saved-card" onclick="analyzeSaved('${escapeHtml(cat.category)}')">
-                    <button class="saved-remove" onclick="event.stopPropagation();removeSaved(${cat.id})">&times;</button>
-                    <div class="saved-emoji">${emoji}</div>
-                    <div class="saved-name">${escapeHtml(cat.category)}</div>
-                    <div class="saved-total">${total}</div>
+        return `
+            <div class="dash-card" onclick="analyzeSaved('${escapeHtml(cat.category)}')">
+                <div class="dash-card-left">
+                    <span class="dash-card-emoji">${emoji}</span>
+                    <span class="dash-card-name">${escapeHtml(cat.category)}</span>
+                </div>
+                <div class="dash-card-right">
+                    <span class="dash-card-total">${total}</span>
                     ${changeHtml}
-                </div>`;
-        }).join("");
-    } catch (e) {}
+                    <button class="dash-card-remove" onclick="event.stopPropagation();removeSaved(${cat.id})">&times;</button>
+                </div>
+            </div>`;
+    }).join("");
 }
 
 async function analyzeSaved(category) {
@@ -326,11 +367,15 @@ let carouselTimer = null;
 let carouselPaused = false;
 
 function showCategoryPicker() {
+    showHome();
+}
+
+function showHome() {
     carouselIdx = 0;
     carouselPaused = false;
     updateCarouselDisplay();
     startCarousel();
-    renderAuthUI();
+    renderHomeHeader();
     loadSavedCategories();
     loadConnectedAccounts();
 
@@ -339,6 +384,19 @@ function showCategoryPicker() {
     });
 
     showScreen("picker");
+}
+
+function renderHomeHeader() {
+    const greetingEl = document.getElementById("homeGreeting");
+    const signOutEl = document.getElementById("homeSignOut");
+    if (currentUser) {
+        const firstName = currentUser.name.split(" ")[0];
+        greetingEl.textContent = `hello, ${firstName}`;
+        signOutEl.style.display = "inline";
+    } else {
+        greetingEl.textContent = "";
+        signOutEl.style.display = "none";
+    }
 }
 
 function startCarousel() {
@@ -426,10 +484,7 @@ async function runAnalysis() {
     if (analysisCache[selectedCategory]) {
         analysisData = analysisCache[selectedCategory];
         renderResults(analysisData);
-        const trackBtn = document.getElementById("trackBtn");
-        trackBtn.textContent = "track this";
-        trackBtn.disabled = false;
-        trackBtn.classList.remove("tracked");
+        updateTrackButton();
         showScreen("results");
         return;
     }
@@ -452,11 +507,7 @@ async function runAnalysis() {
         analysisData = data;
         analysisCache[selectedCategory] = data;
         renderResults(data);
-        // Reset track button
-        const trackBtn = document.getElementById("trackBtn");
-        trackBtn.textContent = "track this";
-        trackBtn.disabled = false;
-        trackBtn.classList.remove("tracked");
+        updateTrackButton();
         showScreen("results");
     } catch (e) {
         stopProgress();
@@ -583,11 +634,14 @@ function toggleSec(idx) {
     document.getElementById(`sec-${idx}`).classList.toggle("open");
 }
 
-function goBack() {
+function goBack() { goHome(); }
+
+function goHome() {
     carouselPaused = false;
     document.getElementById("carouselHint").textContent = "tap to select";
     document.getElementById("carouselHint").classList.remove("paused");
     startCarousel();
+    renderHomeHeader();
     loadSavedCategories();
     loadConnectedAccounts();
     showScreen("picker");
@@ -614,6 +668,20 @@ async function trackCategory() {
         btn.classList.add("tracked");
     } catch (e) {
         showError("Failed to save: " + e.message);
+    }
+}
+
+function updateTrackButton() {
+    const trackBtn = document.getElementById("trackBtn");
+    const isTracked = savedCategoriesList.some(c => c.category === selectedCategory);
+    if (isTracked) {
+        trackBtn.textContent = "tracking \u2713";
+        trackBtn.disabled = true;
+        trackBtn.classList.add("tracked");
+    } else {
+        trackBtn.textContent = "track this";
+        trackBtn.disabled = false;
+        trackBtn.classList.remove("tracked");
     }
 }
 

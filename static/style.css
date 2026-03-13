@@ -200,23 +200,215 @@ body {
 .btn-go:active { opacity: 0.85; }
 
 /* ============================
-   CATEGORY PICKER
+   HOME HEADER
    ============================ */
-.picker-wrap {
-    flex: 1;
-    padding: 48px 28px;
-    padding-bottom: calc(48px + var(--safe-bottom));
+.home-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 8px;
+    padding-top: calc(16px + var(--safe-top));
     max-width: 520px;
     margin: 0 auto;
     width: 100%;
 }
 
-.picker-header {
+.home-greeting {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text);
+}
+
+.home-footer {
+    padding: 16px 20px;
+    padding-bottom: calc(16px + var(--safe-bottom));
+    text-align: center;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* ============================
+   DASHBOARD
+   ============================ */
+.dashboard-section {
+    padding: 16px 20px 0;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.dashboard-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 20px;
-    padding-top: calc(12px + var(--safe-top));
+    margin-bottom: 12px;
+}
+
+.dashboard-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.dashboard-period {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text3);
+}
+
+.dashboard-summary {
+    margin-bottom: 16px;
+}
+
+.summary-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.summary-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.summary-amount {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--text);
+}
+
+.summary-change {
+    display: block;
+    text-align: right;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.dashboard-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dash-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.15s;
+}
+.dash-card:active { transform: scale(0.98); }
+.dash-card:hover { border-color: var(--text3); }
+
+.dash-card-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dash-card-emoji { font-size: 1.3rem; }
+
+.dash-card-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.dash-card-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dash-card-total {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+}
+
+.dash-card-change {
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.dash-card-remove {
+    background: none;
+    border: none;
+    font-size: 0.9rem;
+    color: var(--text3);
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.dash-card:hover .dash-card-remove { opacity: 1; }
+
+/* ============================
+   EXPLORE SECTION
+   ============================ */
+.explore-section {
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.explore-divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 24px 20px 0;
+    font-size: 0.78rem;
+    color: var(--text3);
+    font-weight: 500;
+}
+
+.explore-divider::before,
+.explore-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.dashboard-tip {
+    font-size: 0.72rem;
+    color: var(--text3);
+    text-align: center;
+    margin-top: 16px;
+    font-weight: 500;
+    font-style: italic;
+}
+
+/* ============================
+   CATEGORY PICKER
+   ============================ */
+.picker-wrap {
+    padding: 32px 28px;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.picker-wrap-hero {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .picker-pre {
@@ -596,110 +788,8 @@ body {
 }
 .auth-link-small:hover { color: var(--text); }
 
-.picker-user {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--text);
-    margin-right: 6px;
-}
 
-.picker-header-left {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-/* ============================
-   SAVED CATEGORIES
-   ============================ */
-.saved-section {
-    padding: 16px 20px 0;
-    max-width: 520px;
-    margin: 0 auto;
-    width: 100%;
-}
-
-.saved-header {
-    margin-bottom: 10px;
-}
-
-.saved-title {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--text3);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.saved-cards {
-    display: flex;
-    gap: 10px;
-    overflow-x: auto;
-    padding-bottom: 8px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-}
-.saved-cards::-webkit-scrollbar { display: none; }
-
-.saved-card {
-    position: relative;
-    flex-shrink: 0;
-    width: 120px;
-    padding: 14px 12px;
-    background: var(--card);
-    border: 1.5px solid var(--border);
-    border-radius: 14px;
-    cursor: pointer;
-    text-align: center;
-    transition: transform 0.1s, border-color 0.15s;
-}
-.saved-card:active { transform: scale(0.96); }
-.saved-card:hover { border-color: var(--text3); }
-
-.saved-remove {
-    position: absolute;
-    top: 4px;
-    right: 6px;
-    background: none;
-    border: none;
-    font-size: 0.9rem;
-    color: var(--text3);
-    cursor: pointer;
-    padding: 2px 4px;
-    line-height: 1;
-    opacity: 0;
-    transition: opacity 0.15s;
-}
-.saved-card:hover .saved-remove { opacity: 1; }
-
-.saved-emoji {
-    font-size: 1.5rem;
-    margin-bottom: 4px;
-}
-
-.saved-name {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 4px;
-}
-
-.saved-total {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: -0.02em;
-}
-
-.saved-change {
-    display: block;
-    font-size: 0.68rem;
-    font-weight: 600;
-    margin-top: 2px;
-}
+/* (saved categories styles moved to dashboard section above) */
 
 .change-up { color: #FF3B30; }
 .change-down { color: #34C759; }
@@ -870,5 +960,4 @@ body {
 @media (min-width: 600px) {
     .rotating-wrap { font-size: 5rem; }
     .row-30 .row-amount { font-size: 4.5rem; }
-    .picker-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
