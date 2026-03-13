@@ -383,17 +383,21 @@ function showHome() {
 }
 
 async function loadSpendingSummary() {
+    const el = document.getElementById("spendingSummary");
     try {
         const resp = await fetch("/api/spending_summary");
+        if (!resp.ok) { el.style.display = "none"; return; }
         const data = await resp.json();
-        const el = document.getElementById("spendingSummary");
         if (data.total > 0) {
             el.style.display = "block";
             el.innerHTML = `<span class="summary-total">${fmt(data.total)}</span> spent across <span class="summary-count">${data.count.toLocaleString()}</span> transactions`;
         } else {
             el.style.display = "none";
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error("spending summary error:", e);
+        el.style.display = "none";
+    }
 }
 
 function renderHomeHeader() {
