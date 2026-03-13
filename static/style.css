@@ -275,6 +275,30 @@ body::before {
     letter-spacing: 0.02em;
 }
 
+.welcome-built {
+    opacity: 0.75;
+    color: var(--text2);
+}
+
+.welcome-copyright {
+    margin-top: 8px;
+    opacity: 0.6;
+}
+
+.welcome-links {
+    margin-top: 4px;
+}
+
+.welcome-links a {
+    color: var(--text3);
+    text-decoration: none;
+}
+
+.welcome-links a:hover {
+    color: var(--text2);
+    text-decoration: underline;
+}
+
 /* ============================
    BUTTONS
    ============================ */
@@ -1321,6 +1345,18 @@ body::before {
 /* ============================
    RESPONSIVE
    ============================ */
+/* ============================
+   PILL FADE TRANSITION
+   ============================ */
+.pill-text {
+    display: inline;
+    transition: opacity 0.3s ease;
+}
+
+.pill-text.pill-fade-out {
+    opacity: 0;
+}
+
 @media (min-width: 600px) {
     .rotating-wrap { font-size: 5rem; }
     .row-30 .row-amount { font-size: 4.5rem; }

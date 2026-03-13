@@ -26,6 +26,19 @@ const CATEGORIES = [
     { key: "san francisco", emoji: "\u{1F309}", label: "san francisco" },
 ];
 
+const CAROUSEL_EXAMPLES = [
+    { emoji: "\u{1F37D}\uFE0F", label: "restaurants last week" },
+    { emoji: "\u{1F697}", label: "uber in the last month" },
+    { emoji: "\u{1F961}", label: "takeout on weekends" },
+    { emoji: "\u{1F4E6}", label: "amazon purchases" },
+    { emoji: "\u{1F4F1}", label: "subscriptions over $20" },
+    { emoji: "\u2615", label: "coffee in san francisco" },
+    { emoji: "\u2708\uFE0F", label: "flights to hawaii" },
+    { emoji: "\u{1F6D2}", label: "groceries in january" },
+    { emoji: "\u{1F35F}", label: "fast food last 3 months" },
+    { emoji: "\u{1F377}", label: "alcohol this year" },
+];
+
 const CAT_ICONS = {
     // Pet-specific
     food_treats: "\u{1F9B4}", health_vet: "\u{1F3E5}", insurance: "\u{1F6E1}\uFE0F", grooming: "\u2702\uFE0F",
@@ -151,9 +164,9 @@ function startRotation() {
         wordEl.classList.add("out");
         if (emojiEl) emojiEl.classList.add("out");
         setTimeout(() => {
-            rotateIdx = (rotateIdx + 1) % CATEGORIES.length;
-            wordEl.textContent = CATEGORIES[rotateIdx].label;
-            if (emojiEl) emojiEl.textContent = CATEGORIES[rotateIdx].emoji;
+            rotateIdx = (rotateIdx + 1) % CAROUSEL_EXAMPLES.length;
+            wordEl.textContent = CAROUSEL_EXAMPLES[rotateIdx].label;
+            if (emojiEl) emojiEl.textContent = CAROUSEL_EXAMPLES[rotateIdx].emoji;
             wordEl.classList.remove("out");
             wordEl.classList.add("in");
             if (emojiEl) emojiEl.classList.remove("out");
@@ -216,6 +229,8 @@ async function signOut() {
     currentUser = null;
     renderGoogleButton();
     renderAuthUI();
+    showScreen("welcome");
+    startRotation();
 }
 
 function renderGoogleButton() {
@@ -447,19 +462,63 @@ function showHome() {
     showScreen("picker");
 }
 
+let pillRotateTimer = null;
+let pillRotateIdx = 0;
+let pillStats = [];
+
 async function loadSpendingSummary() {
     const el = document.getElementById("spendingSummary");
     islandTxnsLoaded = false;
+    clearInterval(pillRotateTimer);
     try {
         const resp = await fetch("/api/spending_summary");
         if (!resp.ok) { el.style.display = "none"; return; }
         const data = await resp.json();
-        if (data.total > 0) {
+        if (data.d30 && data.d30.total > 0) {
+            el.style.display = "block";
+            el.onclick = toggleIsland;
+
+            pillStats = [];
+            if (data.d30.total > 0) pillStats.push({ total: data.d30.total, count: data.d30.count, label: "last 30 days" });
+            if (data.d7.total > 0) pillStats.push({ total: data.d7.total, count: data.d7.count, label: "last 7 days" });
+            if (data.d1.total > 0) pillStats.push({ total: data.d1.total, count: data.d1.count, label: "yesterday" });
+
+            const s = pillStats[0];
+            el.innerHTML = `
+                <div class="island-pill">
+                    <span class="pill-text"><span class="summary-total">${fmt(s.total)}</span> &middot; ${s.count.toLocaleString()} txns &middot; <span style="color:var(--text3)">${s.label}</span></span>
+                </div>
+                <div class="island-header" onclick="event.stopPropagation();collapseIsland();">
+                    <div class="island-header-left">
+                        <div class="island-header-total">${fmt(data.d30.total)} spent</div>
+                        <div class="island-header-sub">${data.d30.count.toLocaleString()} transactions &middot; last 30 days</div>
+                    </div>
+                    <button class="island-header-close">done</button>
+                </div>
+                <div class="island-body"></div>`;
+
+            if (pillStats.length > 1) {
+                pillRotateIdx = 0;
+                pillRotateTimer = setInterval(() => {
+                    if (islandOpen) return;
+                    const pillText = el.querySelector(".pill-text");
+                    if (!pillText) return;
+                    pillText.classList.add("pill-fade-out");
+                    setTimeout(() => {
+                        pillRotateIdx = (pillRotateIdx + 1) % pillStats.length;
+                        const ps = pillStats[pillRotateIdx];
+                        pillText.innerHTML = `<span class="summary-total">${fmt(ps.total)}</span> &middot; ${ps.count.toLocaleString()} txns &middot; <span style="color:var(--text3)">${ps.label}</span>`;
+                        pillText.classList.remove("pill-fade-out");
+                    }, 300);
+                }, 3000);
+            }
+        } else if (data.total > 0) {
+            // Fallback for old API format
             el.style.display = "block";
             el.onclick = toggleIsland;
             el.innerHTML = `
                 <div class="island-pill">
-                    <span class="summary-total">${fmt(data.total)}</span> spent across <span class="summary-count">${data.count.toLocaleString()}</span> transactions <span style="color:var(--text3)">last 30 days</span>
+                    <span class="pill-text"><span class="summary-total">${fmt(data.total)}</span> &middot; ${data.count.toLocaleString()} txns &middot; <span style="color:var(--text3)">last 30 days</span></span>
                 </div>
                 <div class="island-header" onclick="event.stopPropagation();collapseIsland();">
                     <div class="island-header-left">
@@ -538,10 +597,7 @@ function renderIslandTransactions(container, txns) {
         }
 
         const merchant = txn.merchant_name || "";
-        const detail = merchant && merchant !== txn.name ? merchant : "";
-        const cat = txn.personal_finance_category;
-        const catLabel = cat && cat.primary ? cat.primary.toLowerCase().replace(/_/g, " ") : "";
-        const detailParts = [detail, catLabel].filter(Boolean).join(" \u00B7 ");
+        const detailParts = merchant && merchant !== txn.name ? merchant : "";
 
         html += `
             <div class="island-txn">
@@ -578,7 +634,7 @@ function startCarousel() {
         emojiEl.classList.add("out");
         wordEl.classList.add("out");
         setTimeout(() => {
-            carouselIdx = (carouselIdx + 1) % CATEGORIES.length;
+            carouselIdx = (carouselIdx + 1) % CAROUSEL_EXAMPLES.length;
             updateCarouselDisplay();
             emojiEl.classList.remove("out");
             wordEl.classList.remove("out");
@@ -587,9 +643,9 @@ function startCarousel() {
 }
 
 function updateCarouselDisplay() {
-    const cat = CATEGORIES[carouselIdx];
-    document.getElementById("carouselEmoji").textContent = cat.emoji;
-    document.getElementById("carouselWord").textContent = cat.label;
+    const ex = CAROUSEL_EXAMPLES[carouselIdx];
+    document.getElementById("carouselEmoji").textContent = ex.emoji;
+    document.getElementById("carouselWord").textContent = ex.label;
 }
 
 function selectCarousel() {
@@ -598,7 +654,7 @@ function selectCarousel() {
         document.getElementById("carouselHint").textContent = "tap again to analyze";
         document.getElementById("carouselHint").classList.add("paused");
     } else {
-        selectedCategory = CATEGORIES[carouselIdx].key;
+        selectedCategory = CAROUSEL_EXAMPLES[carouselIdx].label;
         clearInterval(carouselTimer);
         runAnalysis();
     }
@@ -607,15 +663,16 @@ function selectCarousel() {
 // ===== ROTATING PLACEHOLDER =====
 const PLACEHOLDER_EXAMPLES = [
     "type anything...",
-    "coffee in san francisco",
-    "restaurants in march",
-    "uber last 3 months",
-    "groceries in january",
-    "shopping in new york",
-    "flights to hawaii",
-    "amazon purchases",
+    "restaurants last week",
+    "uber in the last month",
     "takeout on weekends",
+    "amazon purchases",
     "subscriptions over $20",
+    "coffee in san francisco",
+    "flights to hawaii",
+    "groceries in january",
+    "fast food last 3 months",
+    "alcohol this year",
 ];
 let placeholderIdx = 0;
 let placeholderTimer = null;
@@ -629,6 +686,39 @@ function startPlaceholderRotation() {
         if (document.activeElement === input) return; // don't rotate while focused
         placeholderIdx = (placeholderIdx + 1) % PLACEHOLDER_EXAMPLES.length;
         input.placeholder = PLACEHOLDER_EXAMPLES[placeholderIdx];
+    }, 3000);
+}
+
+// ===== CONTEXTUAL REFINE PLACEHOLDERS =====
+let refineRotateTimer = null;
+let refineRotateIdx = 0;
+
+function getRefineExamples(category) {
+    const cat = category.toLowerCase();
+    const specific = {
+        amazon: ["amazon subscriptions", "amazon over $50", "amazon last month"],
+        restaurants: ["restaurants over $30", "restaurants last week", "italian restaurants"],
+        coffee: ["coffee over $5", "coffee last week", "starbucks"],
+        groceries: ["groceries over $100", "groceries last week", "whole foods"],
+        uber: ["uber over $20", "uber last week", "uber eats"],
+    };
+    for (const [key, examples] of Object.entries(specific)) {
+        if (cat.includes(key)) return examples;
+    }
+    return ["over $50", "last month", "last week"];
+}
+
+function startRefineRotation(category) {
+    clearInterval(refineRotateTimer);
+    const input = document.getElementById("refineInput");
+    if (!input) return;
+    const examples = getRefineExamples(category);
+    refineRotateIdx = 0;
+    input.placeholder = examples[0];
+    refineRotateTimer = setInterval(() => {
+        if (document.activeElement === input) return;
+        refineRotateIdx = (refineRotateIdx + 1) % examples.length;
+        input.placeholder = examples[refineRotateIdx];
     }, 3000);
 }
 
@@ -722,18 +812,22 @@ function renderResults(data) {
 
     const days = data.days_available || 365;
     const stack = document.querySelector(".results-stack");
+    const displayLabel = refinementStack.length > 0 ? buildRefinementLabel() : selectedCategory;
+    const catObj = CATEGORIES.find(c => c.key === selectedCategory);
+    const resultEmoji = data.emoji || (catObj ? catObj.emoji : "");
+    const onLabel = `on ${resultEmoji ? resultEmoji + " " : ""}${escapeHtml(displayLabel)}`;
 
     if (days <= 35) {
         stack.innerHTML = `
             <div class="result-row row-1yr">
                 <span class="row-amount">${fmt(data.total_1yr || 0)}</span>
-                <span class="row-label">last ${days} days</span>
+                <span class="row-label">last ${days} days ${onLabel}</span>
             </div>`;
     } else if (days <= 95) {
         stack.innerHTML = `
             <div class="result-row row-30">
                 <span class="row-amount">${fmt(data.total_30d || 0)}</span>
-                <span class="row-label">last 30 days</span>
+                <span class="row-label">last 30 days ${onLabel}</span>
             </div>
             <div class="result-row row-1yr">
                 <span class="row-amount">${fmt(data.total_1yr || 0)}</span>
@@ -750,7 +844,7 @@ function renderResults(data) {
         stack.innerHTML = `
             <div class="result-row row-30">
                 <span class="row-amount" id="amt30">${fmt(data.total_30d || 0)}</span>
-                <span class="row-label">last 30 days</span>
+                <span class="row-label">last 30 days ${onLabel}</span>
             </div>
             ${momHtml ? `<div class="result-row-mom">${momHtml}</div>` : ""}
             <div class="result-row row-90">
@@ -763,17 +857,13 @@ function renderResults(data) {
             </div>`;
     }
 
-    const displayLabel = refinementStack.length > 0 ? buildRefinementLabel() : selectedCategory;
-    const catObj = CATEGORIES.find(c => c.key === selectedCategory);
-    const resultEmoji = data.emoji || (catObj ? catObj.emoji : "");
-    document.getElementById("resultsOn").innerHTML = `on ${resultEmoji ? resultEmoji + " " : ""}${escapeHtml(displayLabel)}`;
-
     let metaText = `${data.transaction_count} transactions \u00B7 ${data.total_transactions_analyzed} analyzed`;
     if (days < 90) {
         metaText += ` \u00B7 ${days} days of bank history available`;
     }
     document.getElementById("resultsMeta").textContent = metaText;
 
+    startRefineRotation(displayLabel);
     renderSections(data.categories);
 }
 
@@ -840,6 +930,7 @@ function goBack() { goHome(); }
 
 function goHome() {
     refinementStack = [];
+    clearInterval(refineRotateTimer);
     carouselPaused = false;
     document.getElementById("carouselHint").textContent = "tap to select";
     document.getElementById("carouselHint").classList.remove("paused");

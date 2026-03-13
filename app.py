@@ -496,12 +496,17 @@ def spending_summary():
         if error:
             return jsonify({"total": 0, "count": 0})
         cached_txns, _ = result
-    # Filter to last 30 days only
-    d30 = str(date.today() - timedelta(days=30))
+    # Compute stats for 1d, 7d, 30d windows
+    today = date.today()
+    d1 = str(today - timedelta(days=1))
+    d7 = str(today - timedelta(days=7))
+    d30 = str(today - timedelta(days=30))
     # Plaid: positive amount = money out (expense)
-    expenses = [t for t in cached_txns if t.get("amount", 0) > 0 and t.get("date", "") >= d30]
-    total = sum(t["amount"] for t in expenses)
-    return jsonify({"total": round(total, 2), "count": len(expenses)})
+    all_expenses = [t for t in cached_txns if t.get("amount", 0) > 0]
+    def stats_for(cutoff):
+        txns = [t for t in all_expenses if t.get("date", "") >= cutoff]
+        return {"total": round(sum(t["amount"] for t in txns), 2), "count": len(txns)}
+    return jsonify({"d1": stats_for(d1), "d7": stats_for(d7), "d30": stats_for(d30)})
 
 
 @app.route("/api/transactions")

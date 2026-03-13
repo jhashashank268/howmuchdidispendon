@@ -22,7 +22,7 @@
     <div id="welcome" class="screen active">
         <div class="welcome-wrap">
             <div class="welcome-top">
-                <p class="welcome-pre">how much did i spend on</p>
+                <p class="welcome-pre">how much did i spend</p>
                 <div class="rotating-emoji" id="rotatingEmoji">&#x1f436;</div>
                 <div class="rotating-wrap">
                     <span class="rotating-word" id="rotatingWord">dog</span>
@@ -31,7 +31,9 @@
             <div class="welcome-bottom">
                 <div id="googleSignInBtn" class="google-signin-container"></div>
                 <div id="welcomeAuth" class="welcome-auth"></div>
-                <p class="welcome-fine" style="opacity:0.5;margin-top:6px;">built in a chaotic home with a toddler by shashank</p>
+                <p class="welcome-fine welcome-built" style="margin-top:6px;">built in a chaotic home with a toddler by shashank</p>
+                <p class="welcome-fine welcome-copyright">&copy; 2025 How Much Did I Spend</p>
+                <p class="welcome-fine welcome-links"><a href="/privacy">privacy</a> &middot; <a href="mailto:hello@howmuchdidispendon.com">about</a> &middot; <a href="mailto:hello@howmuchdidispendon.com">contact</a></p>
             </div>
         </div>
     </div>
@@ -41,7 +43,7 @@
         <div class="onboarding-wrap">
             <div class="onboarding-top">
                 <p class="onboarding-hello" id="onboardingHello">hello!</p>
-                <p class="onboarding-sub">connect your bank and credit card accounts to see how much you spend on anything — from groceries and coffee to trips to hawaii or san francisco</p>
+                <p class="onboarding-sub">connect your bank and credit card accounts to see how much you spend on anything — ask anything like "uber last month", "takeout on weekends", or "subscriptions over $20"</p>
             </div>
             <div class="onboarding-bottom">
                 <button class="btn-main" onclick="startPlaidLink()">connect your bank account</button>
@@ -68,7 +70,7 @@
         <!-- Explore / Carousel (always on top) -->
         <div class="explore-section" id="exploreSection">
             <div class="picker-wrap" id="pickerWrap">
-                <p class="picker-pre">how much did i spend on</p>
+                <p class="picker-pre">how much did i spend</p>
                 <div class="carousel-area" id="carouselArea" onclick="selectCarousel()">
                     <div class="carousel-emoji" id="carouselEmoji">&#x1f436;</div>
                     <div class="carousel-word" id="carouselWord">dog</div>
@@ -122,8 +124,6 @@
         <div class="results-body">
             <div class="refinement-chain" id="refinementChain" style="display:none;"></div>
 
-            <p class="results-pre">you spent</p>
-
             <div class="results-stack">
                 <div class="result-row row-30">
                     <span class="row-amount" id="amt30">$0</span>
@@ -138,8 +138,6 @@
                     <span class="row-label">last year</span>
                 </div>
             </div>
-
-            <p class="results-on" id="resultsOn">on dog</p>
             <p class="results-meta" id="resultsMeta"></p>
 
             <button class="btn-track" id="trackBtn" onclick="trackCategory()">track this</button>
