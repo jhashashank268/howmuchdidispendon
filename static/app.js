@@ -6,6 +6,32 @@ let prefetchedCategories = new Set();
 let prefetchPollTimer = null;
 const analysisCache = {}; // category -> API response, avoids redundant LLM calls
 
+// ===== THEME =====
+function initTheme() {
+    const saved = localStorage.getItem("theme");
+    if (saved) {
+        document.documentElement.dataset.theme = saved;
+    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        document.documentElement.dataset.theme = "dark";
+    }
+}
+
+function toggleTheme() {
+    const current = document.documentElement.dataset.theme;
+    const next = current === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("theme", next);
+
+    // Animate the toggle button
+    document.querySelectorAll(".theme-toggle").forEach(btn => {
+        btn.style.transform = "scale(0.8) rotate(180deg)";
+        setTimeout(() => { btn.style.transform = ""; }, 300);
+    });
+}
+
+// Apply theme immediately (before DOM ready)
+initTheme();
+
 const CATEGORIES = [
     { key: "dog", emoji: "\u{1F436}", label: "dog" },
     { key: "groceries", emoji: "\u{1F6D2}", label: "groceries" },

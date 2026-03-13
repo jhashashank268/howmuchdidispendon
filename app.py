@@ -443,12 +443,20 @@ def saved_categories_delete(cat_id):
 def spending_summary():
     """Lightweight summary: total expenses and transaction count from cached data."""
     uid, aid = _get_scope()
-    result, error = _get_transactions(user_id=uid, anon_id=aid)
-    if error:
+    linked = db.get_all_access_tokens(user_id=uid, anon_id=aid)
+    if not linked:
         return jsonify({"total": 0, "count": 0})
-    all_transactions, _ = result
+    txn_cache_key = "|".join(sorted(l["item_id"] for l in linked))
+    # Use relaxed 24-hour TTL — summary doesn't need real-time data
+    cached_txns, _ = db.get_cached_transactions(txn_cache_key, max_age_minutes=1440)
+    if not cached_txns:
+        # No cached data at all — try a fresh Plaid fetch
+        result, error = _get_transactions(user_id=uid, anon_id=aid)
+        if error:
+            return jsonify({"total": 0, "count": 0})
+        cached_txns, _ = result
     # Plaid: positive amount = money out (expense)
-    expenses = [t for t in all_transactions if t.get("amount", 0) > 0]
+    expenses = [t for t in cached_txns if t.get("amount", 0) > 0]
     total = sum(t["amount"] for t in expenses)
     return jsonify({"total": round(total, 2), "count": len(expenses)})
 
