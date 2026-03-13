@@ -7,18 +7,20 @@ let prefetchPollTimer = null;
 const analysisCache = {}; // category -> API response, avoids redundant LLM calls
 
 const CATEGORIES = [
-    { key: "dog", emoji: "\u{1F436}", label: "dog", domain: "dog.com" },
-    { key: "groceries", emoji: "\u{1F6D2}", label: "groceries", domain: "groceries.com" },
-    { key: "coffee", emoji: "\u2615", label: "coffee", domain: "coffee.com" },
-    { key: "restaurants", emoji: "\u{1F37D}\uFE0F", label: "restaurants", domain: "restaurants.com" },
-    { key: "rent", emoji: "\u{1F3E0}", label: "rent", domain: "rent.com" },
-    { key: "clothes", emoji: "\u{1F455}", label: "clothes", domain: "clothes.com" },
-    { key: "rideshare", emoji: "\u{1F697}", label: "rideshare", domain: "rideshare.com" },
-    { key: "subscriptions", emoji: "\u{1F4F1}", label: "subscriptions", domain: "subscriptions.com" },
-    { key: "travel", emoji: "\u2708\uFE0F", label: "travel", domain: "travel.com" },
-    { key: "fitness", emoji: "\u{1F4AA}", label: "fitness", domain: "fitness.com" },
-    { key: "fast food", emoji: "\u{1F35F}", label: "fast food", domain: "fastfood.com" },
-    { key: "alcohol", emoji: "\u{1F377}", label: "alcohol", domain: "alcohol.com" },
+    { key: "dog", emoji: "\u{1F436}", label: "dog" },
+    { key: "groceries", emoji: "\u{1F6D2}", label: "groceries" },
+    { key: "coffee", emoji: "\u2615", label: "coffee" },
+    { key: "restaurants", emoji: "\u{1F37D}\uFE0F", label: "restaurants" },
+    { key: "rent", emoji: "\u{1F3E0}", label: "rent" },
+    { key: "clothes", emoji: "\u{1F455}", label: "clothes" },
+    { key: "rideshare", emoji: "\u{1F697}", label: "rideshare" },
+    { key: "subscriptions", emoji: "\u{1F4F1}", label: "subscriptions" },
+    { key: "travel", emoji: "\u2708\uFE0F", label: "travel" },
+    { key: "fitness", emoji: "\u{1F4AA}", label: "fitness" },
+    { key: "fast food", emoji: "\u{1F35F}", label: "fast food" },
+    { key: "alcohol", emoji: "\u{1F377}", label: "alcohol" },
+    { key: "hawaii", emoji: "\u{1F308}", label: "hawaii" },
+    { key: "san francisco", emoji: "\u{1F309}", label: "san francisco" },
 ];
 
 const CAT_ICONS = {
@@ -271,7 +273,8 @@ async function loadSavedCategories() {
         section.style.display = "block";
         container.innerHTML = cats.map(cat => {
             const catObj = CATEGORIES.find(c => c.key === cat.category);
-            const emoji = cat.emoji || (catObj ? catObj.emoji : "\u{1F50D}");
+            const cachedEmoji = analysisCache[cat.category]?.emoji;
+            const emoji = cat.emoji || cachedEmoji || (catObj ? catObj.emoji : "\u{1F50D}");
             const total = cat.last_total != null ? fmt(cat.last_total) : "--";
 
             let changeHtml = "";
@@ -294,10 +297,22 @@ async function loadSavedCategories() {
     } catch (e) {}
 }
 
-function analyzeSaved(category) {
+async function analyzeSaved(category) {
     selectedCategory = category;
     clearInterval(carouselTimer);
-    runAnalysis();
+    await runAnalysis();
+    // Re-save with updated emoji from LLM if available
+    if (analysisData && analysisData.emoji) {
+        fetch("/api/saved_categories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                category: category,
+                emoji: analysisData.emoji,
+                total: analysisData.total_30d || 0,
+            }),
+        }).catch(() => {});
+    }
 }
 
 async function removeSaved(id) {
@@ -615,32 +630,14 @@ async function loadConnectedAccounts() {
         }
         section.style.display = "block";
         const names = institutions.map(inst =>
-            `<span class="connected-name">${escapeHtml(inst.institution_name)}</span>`
+            `<a href="#" class="connected-name" onclick="removeAccount('${escapeHtml(inst.item_id)}');return false;" title="tap to disconnect">${escapeHtml(inst.institution_name)}</a>`
         ).join('<span class="connected-sep">&middot;</span>');
         list.innerHTML = `
             <span class="connected-label">connected:</span>
             ${names}
             <span class="connected-sep">&middot;</span>
-            <a href="#" class="connected-action" onclick="addMoreAccounts();return false;">+ add</a>
-            <span class="connected-sep">&middot;</span>
-            <a href="#" class="connected-action connected-disconnect" onclick="showDisconnectMenu();return false;">disconnect</a>`;
+            <a href="#" class="connected-action" onclick="addMoreAccounts();return false;">+ add</a>`;
     } catch (e) {}
-}
-
-function showDisconnectMenu() {
-    // Load institutions and let user pick which to remove
-    fetch("/api/institutions").then(r => r.json()).then(institutions => {
-        const names = institutions.map(inst =>
-            `${inst.institution_name}`
-        ).join("\n");
-        const choice = prompt("Which account to disconnect?\n\n" + names + "\n\nType the name:");
-        if (!choice) return;
-        const match = institutions.find(inst =>
-            inst.institution_name.toLowerCase().includes(choice.toLowerCase())
-        );
-        if (match) removeAccount(match.item_id);
-        else showError("Account not found");
-    });
 }
 
 async function removeAccount(itemId) {

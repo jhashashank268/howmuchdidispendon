@@ -777,6 +777,12 @@ body {
 .connected-name {
     font-weight: 600;
     color: var(--text);
+    text-decoration: none;
+    transition: color 0.15s;
+    cursor: pointer;
+}
+.connected-name:hover {
+    color: var(--pop);
 }
 
 .connected-sep {
@@ -791,8 +797,6 @@ body {
     cursor: pointer;
 }
 .connected-action:hover { color: var(--text); }
-.connected-disconnect { color: var(--text3); }
-.connected-disconnect:hover { color: var(--pop); }
 
 .btn-text-small {
     font-size: 0.78rem;

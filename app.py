@@ -32,6 +32,8 @@ CATEGORIES = [
     {"key": "fitness", "emoji": "\U0001f4aa"},
     {"key": "fast food", "emoji": "\U0001f35f"},
     {"key": "alcohol", "emoji": "\U0001f377"},
+    {"key": "hawaii", "emoji": "\U0001f308"},
+    {"key": "san francisco", "emoji": "\U0001f309"},
 ]
 
 # Track prefetch progress per scope key
