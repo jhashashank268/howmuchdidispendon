@@ -36,7 +36,13 @@ const CAROUSEL_EXAMPLES = [
     { emoji: "\u2708\uFE0F", label: "flights to hawaii" },
     { emoji: "\u{1F6D2}", label: "groceries in january" },
     { emoji: "\u{1F35F}", label: "fast food last 3 months" },
-    { emoji: "\u{1F377}", label: "alcohol this year" },
+    { emoji: "\u{1F436}", label: "dog expenses this year" },
+    { emoji: "\u{1F3E0}", label: "rent and utilities" },
+    { emoji: "\u{1F455}", label: "clothes last 6 months" },
+    { emoji: "\u{1F4AA}", label: "gym and fitness" },
+    { emoji: "\u{1F381}", label: "gifts in december" },
+    { emoji: "\u{1F4BB}", label: "electronics over $100" },
+    { emoji: "\u{1F695}", label: "taxis last weekend" },
 ];
 
 const CAT_ICONS = {
@@ -377,9 +383,6 @@ function renderDashboard(cats) {
     pickerWrap.classList.remove("picker-wrap-hero");
 
     cardsContainer.innerHTML = cats.map(cat => {
-        const catObj = CATEGORIES.find(c => c.key === cat.category);
-        const cachedEmoji = analysisCache[cat.category]?.emoji;
-        const emoji = cat.emoji || cachedEmoji || (catObj ? catObj.emoji : "");
         const total = cat.last_total != null ? fmt(cat.last_total) : "--";
 
         let changeHtml = "";
@@ -393,7 +396,6 @@ function renderDashboard(cats) {
         return `
             <div class="dash-row" onclick="analyzeSaved('${escapeHtml(cat.category)}')">
                 <div class="dash-row-left">
-                    ${emoji ? `<span class="dash-row-emoji">${emoji}</span>` : ""}
                     <span class="dash-row-name">${escapeHtml(cat.category)}</span>
                 </div>
                 <div class="dash-row-right">
@@ -462,14 +464,9 @@ function showHome() {
     showScreen("picker");
 }
 
-let pillRotateTimer = null;
-let pillRotateIdx = 0;
-let pillStats = [];
-
 async function loadSpendingSummary() {
     const el = document.getElementById("spendingSummary");
     islandTxnsLoaded = false;
-    clearInterval(pillRotateTimer);
     try {
         const resp = await fetch("/api/spending_summary");
         if (!resp.ok) { el.style.display = "none"; return; }
@@ -478,15 +475,15 @@ async function loadSpendingSummary() {
             el.style.display = "block";
             el.onclick = toggleIsland;
 
-            pillStats = [];
-            if (data.d30.total > 0) pillStats.push({ total: data.d30.total, count: data.d30.count, label: "last 30 days" });
-            if (data.d7.total > 0) pillStats.push({ total: data.d7.total, count: data.d7.count, label: "last 7 days" });
-            if (data.d1.total > 0) pillStats.push({ total: data.d1.total, count: data.d1.count, label: "yesterday" });
+            // Build static pill with up to 3 periods
+            let pillParts = [];
+            pillParts.push(`<span class="pill-stat"><span class="pill-amount">${fmt(data.d30.total)}</span> <span class="pill-period">30d</span></span>`);
+            if (data.d7.total > 0) pillParts.push(`<span class="pill-stat"><span class="pill-amount">${fmt(data.d7.total)}</span> <span class="pill-period">7d</span></span>`);
+            if (data.d1.total > 0) pillParts.push(`<span class="pill-stat"><span class="pill-amount">${fmt(data.d1.total)}</span> <span class="pill-period">1d</span></span>`);
 
-            const s = pillStats[0];
             el.innerHTML = `
                 <div class="island-pill">
-                    <span class="pill-text"><span class="summary-total">${fmt(s.total)}</span> &middot; ${s.count.toLocaleString()} txns &middot; <span style="color:var(--text3)">${s.label}</span></span>
+                    <div class="pill-stats-row">${pillParts.join('<span class="pill-sep">&middot;</span>')}</div>
                 </div>
                 <div class="island-header" onclick="event.stopPropagation();collapseIsland();">
                     <div class="island-header-left">
@@ -496,29 +493,13 @@ async function loadSpendingSummary() {
                     <button class="island-header-close">done</button>
                 </div>
                 <div class="island-body"></div>`;
-
-            if (pillStats.length > 1) {
-                pillRotateIdx = 0;
-                pillRotateTimer = setInterval(() => {
-                    if (islandOpen) return;
-                    const pillText = el.querySelector(".pill-text");
-                    if (!pillText) return;
-                    pillText.classList.add("pill-fade-out");
-                    setTimeout(() => {
-                        pillRotateIdx = (pillRotateIdx + 1) % pillStats.length;
-                        const ps = pillStats[pillRotateIdx];
-                        pillText.innerHTML = `<span class="summary-total">${fmt(ps.total)}</span> &middot; ${ps.count.toLocaleString()} txns &middot; <span style="color:var(--text3)">${ps.label}</span>`;
-                        pillText.classList.remove("pill-fade-out");
-                    }, 300);
-                }, 3000);
-            }
         } else if (data.total > 0) {
             // Fallback for old API format
             el.style.display = "block";
             el.onclick = toggleIsland;
             el.innerHTML = `
                 <div class="island-pill">
-                    <span class="pill-text"><span class="summary-total">${fmt(data.total)}</span> &middot; ${data.count.toLocaleString()} txns &middot; <span style="color:var(--text3)">last 30 days</span></span>
+                    <div class="pill-stats-row"><span class="pill-stat"><span class="pill-amount">${fmt(data.total)}</span> <span class="pill-period">30d</span></span></div>
                 </div>
                 <div class="island-header" onclick="event.stopPropagation();collapseIsland();">
                     <div class="island-header-left">
@@ -639,7 +620,7 @@ function startCarousel() {
             emojiEl.classList.remove("out");
             wordEl.classList.remove("out");
         }, 250);
-    }, 1800);
+    }, 2500);
 }
 
 function updateCarouselDisplay() {
@@ -672,7 +653,9 @@ const PLACEHOLDER_EXAMPLES = [
     "flights to hawaii",
     "groceries in january",
     "fast food last 3 months",
-    "alcohol this year",
+    "dog expenses this year",
+    "gym and fitness",
+    "electronics over $100",
 ];
 let placeholderIdx = 0;
 let placeholderTimer = null;

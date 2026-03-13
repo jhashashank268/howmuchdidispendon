@@ -543,6 +543,7 @@ body::before {
     color: var(--text2);
     margin-bottom: 12px;
     letter-spacing: -0.02em;
+    text-align: center;
 }
 
 .carousel-area {
@@ -970,16 +971,35 @@ body::before {
     line-height: 1.4;
 }
 
-.summary-total {
-    font-size: 1.4rem;
+.pill-stats-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 8px;
+}
+
+.pill-stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.pill-amount {
+    font-size: 1.3rem;
     font-weight: 700;
     color: var(--text);
     letter-spacing: -0.03em;
 }
 
-.summary-count {
-    font-weight: 700;
-    color: var(--text);
+.pill-period {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text3);
+}
+
+.pill-sep {
+    color: var(--text3);
+    font-size: 0.7rem;
 }
 
 /* ============================
@@ -1345,18 +1365,6 @@ body::before {
 /* ============================
    RESPONSIVE
    ============================ */
-/* ============================
-   PILL FADE TRANSITION
-   ============================ */
-.pill-text {
-    display: inline;
-    transition: opacity 0.3s ease;
-}
-
-.pill-text.pill-fade-out {
-    opacity: 0;
-}
-
 @media (min-width: 600px) {
     .rotating-wrap { font-size: 5rem; }
     .row-30 .row-amount { font-size: 4.5rem; }

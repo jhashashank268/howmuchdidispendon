@@ -88,6 +88,31 @@ def _serialize_txn(txn):
     }
 
 
+# Categories that represent transfers/payments between accounts (not real spending)
+_TRANSFER_CATEGORIES = {
+    "TRANSFER_IN_ACCOUNT_TRANSFER", "TRANSFER_OUT_ACCOUNT_TRANSFER",
+    "LOAN_PAYMENTS_CREDIT_CARD", "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
+    "TRANSFER_IN_CREDIT_CARD_PAYMENT", "TRANSFER_OUT_CREDIT_CARD_PAYMENT",
+}
+
+
+def _is_real_expense(txn):
+    """Return True if this transaction is a real expense (not a transfer/payment between accounts)."""
+    if txn.get("amount", 0) <= 0:
+        return False
+    pf = txn.get("personal_finance_category", {})
+    detailed = (pf.get("detailed") or "").upper()
+    primary = (pf.get("primary") or "").upper()
+    # Filter out credit card payments and inter-account transfers
+    if detailed in _TRANSFER_CATEGORIES or primary in ("TRANSFER_IN", "TRANSFER_OUT", "LOAN_PAYMENTS"):
+        return False
+    # Also filter by common name patterns for credit card payments
+    name = (txn.get("name") or "").upper()
+    if any(kw in name for kw in ("PAYMENT THANK YOU", "AUTOPAY", "CREDIT CARD PAYMENT", "ONLINE PAYMENT")):
+        return False
+    return True
+
+
 def _get_transactions(user_id=None, anon_id=None):
     """Fetch transactions from cache or Plaid. Returns (txns, institution_names) or (None, error_msg)."""
     linked = db.get_all_access_tokens(user_id=user_id, anon_id=anon_id)
@@ -501,8 +526,8 @@ def spending_summary():
     d1 = str(today - timedelta(days=1))
     d7 = str(today - timedelta(days=7))
     d30 = str(today - timedelta(days=30))
-    # Plaid: positive amount = money out (expense)
-    all_expenses = [t for t in cached_txns if t.get("amount", 0) > 0]
+    # Filter to real expenses (exclude transfers/cc payments between accounts)
+    all_expenses = [t for t in cached_txns if _is_real_expense(t)]
     def stats_for(cutoff):
         txns = [t for t in all_expenses if t.get("date", "") >= cutoff]
         return {"total": round(sum(t["amount"] for t in txns), 2), "count": len(txns)}
@@ -511,7 +536,7 @@ def spending_summary():
 
 @app.route("/api/transactions")
 def transactions_list():
-    """Return all transactions from last 30 days, sorted most recent first."""
+    """Return all transactions (up to 90 days), sorted most recent first."""
     uid, aid = _get_scope()
     linked = db.get_all_access_tokens(user_id=uid, anon_id=aid)
     if not linked:
@@ -523,8 +548,8 @@ def transactions_list():
         if error:
             return jsonify([])
         cached_txns, _ = result
-    d30 = str(date.today() - timedelta(days=30))
-    txns = [t for t in cached_txns if t.get("amount", 0) > 0 and t.get("date", "") >= d30]
+    d90 = str(date.today() - timedelta(days=90))
+    txns = [t for t in cached_txns if _is_real_expense(t) and t.get("date", "") >= d90]
     txns.sort(key=lambda t: t.get("date", ""), reverse=True)
     return jsonify(txns)
 
