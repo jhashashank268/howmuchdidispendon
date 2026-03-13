@@ -439,6 +439,20 @@ def saved_categories_delete(cat_id):
     return jsonify({"success": True})
 
 
+@app.route("/api/spending_summary")
+def spending_summary():
+    """Lightweight summary: total expenses and transaction count from cached data."""
+    uid, aid = _get_scope()
+    result, error = _get_transactions(user_id=uid, anon_id=aid)
+    if error:
+        return jsonify({"total": 0, "count": 0})
+    all_transactions, _ = result
+    # Plaid: positive amount = money out (expense)
+    expenses = [t for t in all_transactions if t.get("amount", 0) > 0]
+    total = sum(t["amount"] for t in expenses)
+    return jsonify({"total": round(total, 2), "count": len(expenses)})
+
+
 @app.route("/api/analytics")
 def analytics():
     """Simple analytics dashboard endpoint."""

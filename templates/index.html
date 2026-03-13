@@ -62,22 +62,11 @@
             <div class="connected-inline" id="connectedList"></div>
         </div>
 
-        <!-- Dashboard (shown when saved categories exist) -->
-        <div id="dashboardSection" class="dashboard-section" style="display:none;">
-            <div class="dashboard-header">
-                <span class="dashboard-title">my spending</span>
-                <span class="dashboard-period">last 30 days</span>
-            </div>
-            <div class="dashboard-summary" id="dashboardSummary"></div>
-            <div class="dashboard-cards" id="dashboardCards"></div>
-        </div>
+        <!-- Spending summary -->
+        <div id="spendingSummary" class="spending-summary" style="display:none;"></div>
 
-        <!-- Explore section -->
+        <!-- Explore / Carousel (always on top) -->
         <div class="explore-section" id="exploreSection">
-            <div id="exploreDividerTop" class="explore-divider" style="display:none;">
-                <span>explore something new</span>
-            </div>
-
             <div class="picker-wrap" id="pickerWrap">
                 <p class="picker-pre">how much did i spend on</p>
                 <div class="carousel-area" id="carouselArea" onclick="selectCarousel()">
@@ -103,9 +92,13 @@
             </div>
         </div>
 
-        <!-- Footer -->
-        <div class="home-footer">
-            <button class="btn-text-danger" onclick="doLogout()">disconnect bank</button>
+        <!-- Tracked categories (below carousel) -->
+        <div id="dashboardSection" class="dashboard-section" style="display:none;">
+            <div class="dashboard-header">
+                <span class="dashboard-title">my spending</span>
+                <span class="dashboard-period">last 30 days</span>
+            </div>
+            <div class="dashboard-cards" id="dashboardCards"></div>
         </div>
     </div>
 

@@ -24,11 +24,37 @@ const CATEGORIES = [
 ];
 
 const CAT_ICONS = {
+    // Pet-specific
     food_treats: "\u{1F9B4}", health_vet: "\u{1F3E5}", insurance: "\u{1F6E1}\uFE0F", grooming: "\u2702\uFE0F",
     supplies_toys: "\u{1F9F8}", boarding_daycare: "\u{1F3E0}", walking_sitting: "\u{1F6B6}",
     training: "\u{1F393}", other_pet: "\u{1F43E}",
+    // General categories
     food: "\u{1F37D}\uFE0F", transport: "\u{1F697}", shopping: "\u{1F6CD}\uFE0F", housing: "\u{1F3E0}",
     entertainment: "\u{1F3AC}", health: "\u{1F48A}", utilities: "\u26A1", other: "\u{1F4CB}",
+    // Common LLM-returned labels
+    restaurant: "\u{1F37D}\uFE0F", restaurants: "\u{1F37D}\uFE0F", dining: "\u{1F37D}\uFE0F",
+    clothing: "\u{1F455}", clothes: "\u{1F455}", apparel: "\u{1F455}",
+    grocery: "\u{1F6D2}", groceries: "\u{1F6D2}", supermarket: "\u{1F6D2}",
+    alcohol: "\u{1F377}", bar: "\u{1F37A}", drinks: "\u{1F378}",
+    pharmacy: "\u{1F48A}", medical: "\u{1F3E5}", healthcare: "\u{1F3E5}",
+    salon: "\u2702\uFE0F", beauty: "\u{1F484}", spa: "\u{1F9D6}",
+    gas: "\u26FD", fuel: "\u26FD", gas_station: "\u26FD",
+    coffee: "\u2615", cafe: "\u2615",
+    rideshare: "\u{1F697}", uber: "\u{1F697}", lyft: "\u{1F697}", taxi: "\u{1F695}",
+    travel: "\u2708\uFE0F", flights: "\u2708\uFE0F", hotel: "\u{1F3E8}", hotels: "\u{1F3E8}", lodging: "\u{1F3E8}",
+    subscriptions: "\u{1F4F1}", subscription: "\u{1F4F1}", streaming: "\u{1F4FA}",
+    fitness: "\u{1F4AA}", gym: "\u{1F3CB}\uFE0F",
+    rent: "\u{1F3E0}", mortgage: "\u{1F3E0}",
+    fast_food: "\u{1F35F}", fast_food_: "\u{1F35F}",
+    electronics: "\u{1F4BB}", tech: "\u{1F4BB}", technology: "\u{1F4BB}",
+    education: "\u{1F393}", books: "\u{1F4DA}",
+    pets: "\u{1F43E}", pet: "\u{1F43E}", veterinary: "\u{1F3E5}",
+    home: "\u{1F3E0}", home_improvement: "\u{1F528}", furniture: "\u{1F6CB}\uFE0F",
+    auto: "\u{1F697}", car: "\u{1F697}", parking: "\u{1F17F}\uFE0F",
+    gifts: "\u{1F381}", charity: "\u{1F49D}", donations: "\u{1F49D}",
+    personal_care: "\u{1F9F4}", laundry: "\u{1F9FA}", cleaning: "\u{1F9F9}",
+    childcare: "\u{1F476}", kids: "\u{1F476}",
+    miscellaneous: "\u{1F4CB}", general: "\u{1F4CB}",
 };
 
 // ===== SCREENS =====
@@ -263,56 +289,24 @@ async function loadSavedCategories() {
 function renderDashboard(cats) {
     const section = document.getElementById("dashboardSection");
     const cardsContainer = document.getElementById("dashboardCards");
-    const summaryEl = document.getElementById("dashboardSummary");
-    const exploreDivider = document.getElementById("exploreDividerTop");
     const tipEl = document.getElementById("dashboardTip");
     const pickerWrap = document.getElementById("pickerWrap");
 
     if (!cats || cats.length === 0) {
         section.style.display = "none";
-        exploreDivider.style.display = "none";
         if (tipEl) tipEl.style.display = "block";
-        // Carousel is hero — center it
         pickerWrap.classList.add("picker-wrap-hero");
         return;
     }
 
     section.style.display = "block";
-    exploreDivider.style.display = "flex";
     if (tipEl) tipEl.style.display = "none";
     pickerWrap.classList.remove("picker-wrap-hero");
-
-    // Compute total and aggregate MoM
-    let totalTracked = 0;
-    let totalPrevious = 0;
-    let hasPrevious = false;
-    cats.forEach(cat => {
-        if (cat.last_total != null) totalTracked += cat.last_total;
-        if (cat.previous_total != null && cat.previous_total > 0) {
-            totalPrevious += cat.previous_total;
-            hasPrevious = true;
-        }
-    });
-
-    let momHtml = "";
-    if (hasPrevious && totalPrevious > 0) {
-        const pct = ((totalTracked - totalPrevious) / totalPrevious) * 100;
-        const arrow = pct >= 0 ? "\u2191" : "\u2193";
-        const cls = pct >= 0 ? "change-up" : "change-down";
-        momHtml = `<span class="summary-change ${cls}">${arrow}${Math.abs(pct).toFixed(0)}% vs last month</span>`;
-    }
-
-    summaryEl.innerHTML = `
-        <div class="summary-row">
-            <span class="summary-label">total tracked</span>
-            <span class="summary-amount">${fmt(totalTracked)}</span>
-        </div>
-        ${momHtml}`;
 
     cardsContainer.innerHTML = cats.map(cat => {
         const catObj = CATEGORIES.find(c => c.key === cat.category);
         const cachedEmoji = analysisCache[cat.category]?.emoji;
-        const emoji = cat.emoji || cachedEmoji || (catObj ? catObj.emoji : "\u{1F50D}");
+        const emoji = cat.emoji || cachedEmoji || (catObj ? catObj.emoji : "");
         const total = cat.last_total != null ? fmt(cat.last_total) : "--";
 
         let changeHtml = "";
@@ -320,19 +314,19 @@ function renderDashboard(cats) {
             const pctChange = ((cat.last_total - cat.previous_total) / cat.previous_total) * 100;
             const arrow = pctChange >= 0 ? "\u2191" : "\u2193";
             const cls = pctChange >= 0 ? "change-up" : "change-down";
-            changeHtml = `<span class="dash-card-change ${cls}">${arrow}${Math.abs(pctChange).toFixed(0)}% mom</span>`;
+            changeHtml = `<span class="dash-row-change ${cls}">${arrow}${Math.abs(pctChange).toFixed(0)}%</span>`;
         }
 
         return `
-            <div class="dash-card" onclick="analyzeSaved('${escapeHtml(cat.category)}')">
-                <div class="dash-card-left">
-                    <span class="dash-card-emoji">${emoji}</span>
-                    <span class="dash-card-name">${escapeHtml(cat.category)}</span>
+            <div class="dash-row" onclick="analyzeSaved('${escapeHtml(cat.category)}')">
+                <div class="dash-row-left">
+                    ${emoji ? `<span class="dash-row-emoji">${emoji}</span>` : ""}
+                    <span class="dash-row-name">${escapeHtml(cat.category)}</span>
                 </div>
-                <div class="dash-card-right">
-                    <span class="dash-card-total">${total}</span>
+                <div class="dash-row-right">
                     ${changeHtml}
-                    <button class="dash-card-remove" onclick="event.stopPropagation();removeSaved(${cat.id})">&times;</button>
+                    <span class="dash-row-total">${total}</span>
+                    <button class="dash-row-remove" onclick="event.stopPropagation();removeSaved(${cat.id})">&times;</button>
                 </div>
             </div>`;
     }).join("");
@@ -342,14 +336,14 @@ async function analyzeSaved(category) {
     selectedCategory = category;
     clearInterval(carouselTimer);
     await runAnalysis();
-    // Re-save with updated emoji from LLM if available
-    if (analysisData && analysisData.emoji) {
+    // Re-save with updated emoji and total from analysis
+    if (analysisData) {
         fetch("/api/saved_categories", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 category: category,
-                emoji: analysisData.emoji,
+                emoji: analysisData.emoji || null,
                 total: analysisData.total_30d || 0,
             }),
         }).catch(() => {});
@@ -378,12 +372,28 @@ function showHome() {
     renderHomeHeader();
     loadSavedCategories();
     loadConnectedAccounts();
+    loadSpendingSummary();
+    startPlaceholderRotation();
 
     document.getElementById("customCategory").addEventListener("keydown", e => {
         if (e.key === "Enter") analyzeCustom();
     });
 
     showScreen("picker");
+}
+
+async function loadSpendingSummary() {
+    try {
+        const resp = await fetch("/api/spending_summary");
+        const data = await resp.json();
+        const el = document.getElementById("spendingSummary");
+        if (data.total > 0) {
+            el.style.display = "block";
+            el.innerHTML = `<span class="summary-total">${fmt(data.total)}</span> spent across <span class="summary-count">${data.count.toLocaleString()}</span> transactions`;
+        } else {
+            el.style.display = "none";
+        }
+    } catch (e) {}
 }
 
 function renderHomeHeader() {
@@ -432,6 +442,34 @@ function selectCarousel() {
         clearInterval(carouselTimer);
         runAnalysis();
     }
+}
+
+// ===== ROTATING PLACEHOLDER =====
+const PLACEHOLDER_EXAMPLES = [
+    "type anything...",
+    "coffee in san francisco",
+    "restaurants in march",
+    "uber last 3 months",
+    "groceries in january",
+    "shopping in new york",
+    "flights to hawaii",
+    "amazon purchases",
+    "takeout on weekends",
+    "subscriptions over $20",
+];
+let placeholderIdx = 0;
+let placeholderTimer = null;
+
+function startPlaceholderRotation() {
+    const input = document.getElementById("customCategory");
+    if (!input) return;
+    clearInterval(placeholderTimer);
+    placeholderIdx = 0;
+    placeholderTimer = setInterval(() => {
+        if (document.activeElement === input) return; // don't rotate while focused
+        placeholderIdx = (placeholderIdx + 1) % PLACEHOLDER_EXAMPLES.length;
+        input.placeholder = PLACEHOLDER_EXAMPLES[placeholderIdx];
+    }, 3000);
 }
 
 function analyzeCustom() {
@@ -644,6 +682,7 @@ function goHome() {
     renderHomeHeader();
     loadSavedCategories();
     loadConnectedAccounts();
+    loadSpendingSummary();
     showScreen("picker");
 }
 

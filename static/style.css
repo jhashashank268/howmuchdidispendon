@@ -220,20 +220,12 @@ body {
     color: var(--text);
 }
 
-.home-footer {
-    padding: 16px 20px;
-    padding-bottom: calc(16px + var(--safe-bottom));
-    text-align: center;
-    max-width: 520px;
-    margin: 0 auto;
-    width: 100%;
-}
-
 /* ============================
-   DASHBOARD
+   DASHBOARD (tracked categories)
    ============================ */
 .dashboard-section {
-    padding: 16px 20px 0;
+    padding: 8px 20px 24px;
+    padding-bottom: calc(24px + var(--safe-bottom));
     max-width: 520px;
     margin: 0 auto;
     width: 100%;
@@ -243,11 +235,11 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .dashboard-title {
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 600;
     color: var(--text3);
     text-transform: uppercase;
@@ -255,100 +247,71 @@ body {
 }
 
 .dashboard-period {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 500;
     color: var(--text3);
-}
-
-.dashboard-summary {
-    margin-bottom: 16px;
-}
-
-.summary-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-}
-
-.summary-label {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text2);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-
-.summary-amount {
-    font-size: 2rem;
-    font-weight: 700;
-    letter-spacing: -0.04em;
-    color: var(--text);
-}
-
-.summary-change {
-    display: block;
-    text-align: right;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-top: 2px;
 }
 
 .dashboard-cards {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0;
 }
 
-.dash-card {
+/* Compact inline rows — no borders, no cards */
+.dash-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px;
-    background: var(--card);
-    border: 1.5px solid var(--border);
-    border-radius: 14px;
+    padding: 10px 0;
     cursor: pointer;
-    transition: transform 0.1s, border-color 0.15s;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
 }
-.dash-card:active { transform: scale(0.98); }
-.dash-card:hover { border-color: var(--text3); }
+.dash-row:last-child { border-bottom: none; }
+.dash-row:active { opacity: 0.7; }
 
-.dash-card-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.dash-card-emoji { font-size: 1.3rem; }
-
-.dash-card-name {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text);
-}
-
-.dash-card-right {
+.dash-row-left {
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0;
 }
 
-.dash-card-total {
-    font-size: 1.05rem;
+.dash-row-emoji { font-size: 1.1rem; flex-shrink: 0; }
+
+.dash-row-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dash-row-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.dash-row-total {
+    font-size: 0.95rem;
     font-weight: 700;
     color: var(--text);
     letter-spacing: -0.02em;
 }
 
-.dash-card-change {
-    font-size: 0.7rem;
+.dash-row-change {
+    font-size: 0.68rem;
     font-weight: 600;
 }
 
-.dash-card-remove {
+.dash-row-remove {
     background: none;
     border: none;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: var(--text3);
     cursor: pointer;
     padding: 2px 4px;
@@ -356,7 +319,7 @@ body {
     opacity: 0;
     transition: opacity 0.15s;
 }
-.dash-card:hover .dash-card-remove { opacity: 1; }
+.dash-row:hover .dash-row-remove { opacity: 1; }
 
 /* ============================
    EXPLORE SECTION
@@ -365,24 +328,6 @@ body {
     max-width: 520px;
     margin: 0 auto;
     width: 100%;
-}
-
-.explore-divider {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 24px 20px 0;
-    font-size: 0.78rem;
-    color: var(--text3);
-    font-weight: 500;
-}
-
-.explore-divider::before,
-.explore-divider::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--border);
 }
 
 .dashboard-tip {
@@ -842,8 +787,37 @@ body {
 /* ============================
    CONNECTED ACCOUNTS (inline minimalist)
    ============================ */
+/* ============================
+   SPENDING SUMMARY
+   ============================ */
+.spending-summary {
+    padding: 14px 20px;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text2);
+    line-height: 1.4;
+}
+
+.summary-total {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.03em;
+}
+
+.summary-count {
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* ============================
+   CONNECTED ACCOUNTS (inline minimalist)
+   ============================ */
 .connected-section {
-    padding: 0 20px;
+    padding: 4px 20px 12px;
     max-width: 520px;
     margin: 0 auto;
     width: 100%;
@@ -854,7 +828,7 @@ body {
     align-items: center;
     flex-wrap: wrap;
     gap: 6px;
-    padding: 8px 0;
+    padding: 6px 0;
     font-size: 0.78rem;
     color: var(--text2);
 }
