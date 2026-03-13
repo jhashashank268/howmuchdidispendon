@@ -27,7 +27,12 @@ def _serialize_txn(i, txn):
     pf = txn.get("personal_finance_category") or {}
     if not isinstance(pf, dict):
         pf = {}
-    return f"{i}|{date}|{name}|{merchant}|${amount:.2f}|{','.join(str(c) for c in category)}|{pf.get('detailed', '')}"
+    loc = txn.get("location") or {}
+    if not isinstance(loc, dict):
+        loc = {}
+    loc_parts = [loc.get("city", ""), loc.get("region", ""), loc.get("country", "")]
+    loc_str = ",".join(p for p in loc_parts if p)
+    return f"{i}|{date}|{name}|{merchant}|${amount:.2f}|{','.join(str(c) for c in category)}|{pf.get('detailed', '')}|{loc_str}"
 
 
 def categorize_with_claude(transactions, spending_category="dog"):
@@ -36,7 +41,7 @@ def categorize_with_claude(transactions, spending_category="dog"):
     Works for any category: dog, groceries, coffee, rent, restaurants, uber, etc.
     """
     if not transactions:
-        return []
+        return [], None
 
     # Build transaction block
     txn_lines = [_serialize_txn(i, txn) for i, txn in enumerate(transactions)]
@@ -51,7 +56,7 @@ index|match|subcategory|confidence
 - subcategory: a short label for the type of "{spending_category}" expense (e.g. for "dog": "food", "vet", "grooming"; for "groceries": "supermarket", "organic"; for "coffee": "coffee shop", "beans"; etc.)
 - confidence: high, medium, or low
 
-Transactions (index|date|name|merchant|amount|plaid_category|pf_detail):
+Transactions (index|date|name|merchant|amount|plaid_category|pf_detail|location):
 {txn_block}
 
 CRITICAL RULES:
@@ -63,20 +68,27 @@ CRITICAL RULES:
 5. For broad categories (e.g. "groceries", "restaurants"), match all relevant merchants but respect the pf_detail category.
 6. Only output "yes" if you are genuinely confident this transaction belongs to "{spending_category}".
 7. When unsure, mark confidence as "low" — do NOT guess.
-8. Output ONLY the formatted lines, nothing else."""
+8. LOCATION QUERIES: If the spending category is a place name (city, state, country like "San Francisco", "India", "Fremont"), match ONLY based on the "location" column data (city, region, country). Do NOT guess location from merchant names — a store named "Delhi Grocery" is NOT necessarily in India. Only use the actual location data provided.
+9. FIRST LINE: Output a single emoji that best represents the spending category "{spending_category}" (e.g. 🚗 for Tesla, ☕ for coffee, 🐕 for dog, 🇮🇳 for India, 🌉 for San Francisco). Format: EMOJI|<emoji>
+10. Then output the transaction lines. Output ONLY the formatted lines, nothing else."""
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-haiku-4-5-20251001",
         max_tokens=8192,
         messages=[{"role": "user", "content": prompt}],
     )
 
     results = []
+    suggested_emoji = None
     response_text = response.content[0].text.strip()
 
     for line in response_text.split("\n"):
         line = line.strip()
         if not line or "|" not in line:
+            continue
+        # Extract emoji suggestion from first EMOJI| line
+        if line.startswith("EMOJI|"):
+            suggested_emoji = line.split("|", 1)[1].strip()
             continue
         parts = line.split("|")
         if len(parts) < 4:
@@ -102,7 +114,7 @@ CRITICAL RULES:
         except (ValueError, IndexError):
             continue
 
-    return results
+    return results, suggested_emoji
 
 
 def analyze_pet_spending(transactions, pet_name="dog"):
@@ -111,11 +123,14 @@ def analyze_pet_spending(transactions, pet_name="dog"):
     Works for any spending category despite the function name (kept for API compat).
     """
     all_results = []
+    emoji = None
 
     # Process in batches
     for start in range(0, len(transactions), BATCH_SIZE):
         batch = transactions[start:start + BATCH_SIZE]
-        batch_results = categorize_with_claude(batch, pet_name)
+        batch_results, batch_emoji = categorize_with_claude(batch, pet_name)
+        if batch_emoji and not emoji:
+            emoji = batch_emoji
         all_results.extend(batch_results)
 
     # Calculate totals
@@ -140,4 +155,5 @@ def analyze_pet_spending(transactions, pet_name="dog"):
         "categories": sorted_categories,
         "transactions": sorted(all_results, key=lambda x: x["date"], reverse=True),
         "pet_name": pet_name,
+        "emoji": emoji,
     }

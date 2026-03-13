@@ -4,6 +4,7 @@ let bankConnected = false;
 let currentUser = null; // { id, name, email } or null
 let prefetchedCategories = new Set();
 let prefetchPollTimer = null;
+const analysisCache = {}; // category -> API response, avoids redundant LLM calls
 
 const CATEGORIES = [
     { key: "dog", emoji: "\u{1F436}", label: "dog", domain: "dog.com" },
@@ -107,11 +108,21 @@ async function handleGoogleCredential(response) {
         if (data.error) { showError(data.error); return; }
         currentUser = data.user;
         renderAuthUI();
-        // If bank was already connected anonymously, it's now claimed
-        checkBankAndProceed();
+        // If bank was already connected, go to picker; otherwise show onboarding
+        const hasBanks = await checkBankAndProceed();
+        if (!hasBanks) {
+            showOnboarding();
+        }
     } catch (e) {
         showError("Sign-in failed: " + e.message);
     }
+}
+
+function showOnboarding() {
+    stopRotation();
+    const firstName = currentUser ? currentUser.name.split(" ")[0] : "";
+    document.getElementById("onboardingHello").textContent = firstName ? `hello, ${firstName}!` : "hello!";
+    showScreen("onboarding");
 }
 
 async function signOut() {
@@ -134,23 +145,16 @@ function renderGoogleButton() {
 }
 
 function renderAuthUI() {
-    // Welcome screen auth — toggle Google button vs bank button
     const googleBtn = document.getElementById("googleSignInBtn");
-    const bankBtn = document.getElementById("connectBankBtn");
-    const plaidNote = document.getElementById("welcomePlaidNote");
     const welcomeAuth = document.getElementById("welcomeAuth");
 
     if (currentUser) {
         if (googleBtn) googleBtn.style.display = "none";
-        if (bankBtn) bankBtn.style.display = "block";
-        if (plaidNote) plaidNote.style.display = "block";
         if (welcomeAuth) {
             welcomeAuth.innerHTML = `<p class="welcome-fine" style="margin-top:10px;">signed in as ${escapeHtml(currentUser.name)} &middot; <a href="#" onclick="signOut();return false;" class="auth-link">sign out</a></p>`;
         }
     } else {
         if (googleBtn) googleBtn.style.display = "flex";
-        if (bankBtn) bankBtn.style.display = "none";
-        if (plaidNote) plaidNote.style.display = "none";
         if (welcomeAuth) welcomeAuth.innerHTML = "";
     }
 
@@ -275,7 +279,7 @@ async function loadSavedCategories() {
                 const pctChange = ((cat.last_total - cat.previous_total) / cat.previous_total) * 100;
                 const arrow = pctChange >= 0 ? "\u2191" : "\u2193";
                 const cls = pctChange >= 0 ? "change-up" : "change-down";
-                changeHtml = `<span class="saved-change ${cls}">${arrow}${Math.abs(pctChange).toFixed(0)}%</span>`;
+                changeHtml = `<span class="saved-change ${cls}">${arrow}${Math.abs(pctChange).toFixed(0)}% vs prior 30d</span>`;
             }
 
             return `
@@ -342,7 +346,7 @@ function startCarousel() {
 function updateCarouselDisplay() {
     const cat = CATEGORIES[carouselIdx];
     document.getElementById("carouselEmoji").textContent = cat.emoji;
-    document.getElementById("carouselWord").innerHTML = cat.label + '<span class="carousel-dot">.com</span>';
+    document.getElementById("carouselWord").textContent = cat.label;
 }
 
 function selectCarousel() {
@@ -373,7 +377,7 @@ function animateProgress() {
     const msg = document.getElementById("loadingMsg");
     const catObj = CATEGORIES.find(c => c.key === selectedCategory);
     const emoji = catObj ? catObj.emoji + " " : "";
-    document.getElementById("loadingWord").innerHTML = emoji + escapeHtml(selectedCategory) + '<span class="dot-com">.com</span>';
+    document.getElementById("loadingWord").innerHTML = emoji + escapeHtml(selectedCategory);
     let pct = 0;
     const steps = [
         [10, "checking cache..."],
@@ -403,6 +407,18 @@ function stopProgress() {
 
 // ===== ANALYSIS =====
 async function runAnalysis() {
+    // Return cached result instantly if we already have it for this category
+    if (analysisCache[selectedCategory]) {
+        analysisData = analysisCache[selectedCategory];
+        renderResults(analysisData);
+        const trackBtn = document.getElementById("trackBtn");
+        trackBtn.textContent = "track this";
+        trackBtn.disabled = false;
+        trackBtn.classList.remove("tracked");
+        showScreen("results");
+        return;
+    }
+
     showScreen("loading");
     animateProgress();
 
@@ -419,6 +435,7 @@ async function runAnalysis() {
         }
 
         analysisData = data;
+        analysisCache[selectedCategory] = data;
         renderResults(data);
         // Reset track button
         const trackBtn = document.getElementById("trackBtn");
@@ -455,11 +472,19 @@ function renderResults(data) {
                 <span class="row-label">last ${days} days</span>
             </div>`;
     } else {
+        let momHtml = "";
+        if (data.prior_30d > 0) {
+            const pctChange = ((data.total_30d - data.prior_30d) / data.prior_30d) * 100;
+            const arrow = pctChange >= 0 ? "\u2191" : "\u2193";
+            const cls = pctChange >= 0 ? "change-up" : "change-down";
+            momHtml = `<span class="row-mom ${cls}">${arrow}${Math.abs(pctChange).toFixed(0)}% vs prior 30 days</span>`;
+        }
         stack.innerHTML = `
             <div class="result-row row-30">
                 <span class="row-amount" id="amt30">${fmt(data.total_30d || 0)}</span>
                 <span class="row-label">last 30 days</span>
             </div>
+            ${momHtml ? `<div class="result-row-mom">${momHtml}</div>` : ""}
             <div class="result-row row-90">
                 <span class="row-amount" id="amt90">${fmt(data.total_90d || 0)}</span>
                 <span class="row-label">last 90 days</span>
@@ -472,7 +497,8 @@ function renderResults(data) {
 
     const catObj = CATEGORIES.find(c => c.key === selectedCategory);
     const emoji = catObj ? catObj.emoji + " " : "";
-    document.getElementById("resultsOn").innerHTML = `on ${emoji}${selectedCategory}<span class="dim">.com</span>`;
+    const resultEmoji = data.emoji || (catObj ? catObj.emoji : "");
+    document.getElementById("resultsOn").innerHTML = `on ${resultEmoji ? resultEmoji + " " : ""}${escapeHtml(selectedCategory)}`;
 
     let metaText = `${data.transaction_count} transactions \u00B7 ${data.total_transactions_analyzed} analyzed`;
     if (days < 90) {
@@ -556,7 +582,7 @@ function goBack() {
 async function trackCategory() {
     if (!analysisData) return;
     const catObj = CATEGORIES.find(c => c.key === selectedCategory);
-    const emoji = catObj ? catObj.emoji : null;
+    const emoji = analysisData.emoji || (catObj ? catObj.emoji : null);
     try {
         await fetch("/api/saved_categories", {
             method: "POST",
@@ -564,7 +590,7 @@ async function trackCategory() {
             body: JSON.stringify({
                 category: selectedCategory,
                 emoji: emoji,
-                total: analysisData.total_1yr || 0,
+                total: analysisData.total_30d || 0,
             }),
         });
         const btn = document.getElementById("trackBtn");
@@ -588,12 +614,33 @@ async function loadConnectedAccounts() {
             return;
         }
         section.style.display = "block";
-        list.innerHTML = institutions.map(inst => `
-            <div class="connected-item">
-                <span class="connected-name">${escapeHtml(inst.institution_name)}</span>
-                <button class="btn-remove" onclick="removeAccount('${escapeHtml(inst.item_id)}')">&times;</button>
-            </div>`).join("");
+        const names = institutions.map(inst =>
+            `<span class="connected-name">${escapeHtml(inst.institution_name)}</span>`
+        ).join('<span class="connected-sep">&middot;</span>');
+        list.innerHTML = `
+            <span class="connected-label">connected:</span>
+            ${names}
+            <span class="connected-sep">&middot;</span>
+            <a href="#" class="connected-action" onclick="addMoreAccounts();return false;">+ add</a>
+            <span class="connected-sep">&middot;</span>
+            <a href="#" class="connected-action connected-disconnect" onclick="showDisconnectMenu();return false;">disconnect</a>`;
     } catch (e) {}
+}
+
+function showDisconnectMenu() {
+    // Load institutions and let user pick which to remove
+    fetch("/api/institutions").then(r => r.json()).then(institutions => {
+        const names = institutions.map(inst =>
+            `${inst.institution_name}`
+        ).join("\n");
+        const choice = prompt("Which account to disconnect?\n\n" + names + "\n\nType the name:");
+        if (!choice) return;
+        const match = institutions.find(inst =>
+            inst.institution_name.toLowerCase().includes(choice.toLowerCase())
+        );
+        if (match) removeAccount(match.item_id);
+        else showError("Account not found");
+    });
 }
 
 async function removeAccount(itemId) {
@@ -630,6 +677,7 @@ async function doLogout() {
     if (!confirm("Disconnect all accounts and clear data?")) return;
     await fetch("/api/logout", { method: "POST" });
     analysisData = null;
+    Object.keys(analysisCache).forEach(k => delete analysisCache[k]);
     bankConnected = false;
     currentUser = null;
     prefetchedCategories.clear();

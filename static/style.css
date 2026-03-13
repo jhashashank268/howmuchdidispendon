@@ -419,14 +419,14 @@ body {
     color: var(--text3);
 }
 
-.row-30 .row-amount { font-size: 1.5rem; }
-.row-30 .row-label { font-size: 0.78rem; }
+.row-30 .row-amount { font-size: 3.8rem; }
+.row-30 .row-label { font-size: 0.95rem; }
 
-.row-90 .row-amount { font-size: 2.4rem; }
-.row-90 .row-label { font-size: 0.85rem; }
+.row-90 .row-amount { font-size: 1.5rem; }
+.row-90 .row-label { font-size: 0.78rem; }
 
-.row-1yr .row-amount { font-size: 3.8rem; }
-.row-1yr .row-label { font-size: 0.95rem; }
+.row-1yr .row-amount { font-size: 2.4rem; }
+.row-1yr .row-label { font-size: 0.85rem; }
 
 .results-on {
     font-size: 1.1rem;
@@ -750,7 +750,7 @@ body {
 }
 
 /* ============================
-   CONNECTED ACCOUNTS
+   CONNECTED ACCOUNTS (inline minimalist)
    ============================ */
 .connected-section {
     padding: 0 20px;
@@ -759,42 +759,40 @@ body {
     width: 100%;
 }
 
-.connected-header {
-    margin-bottom: 8px;
-}
-
-.connected-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 12px;
-}
-
-.connected-item {
+.connected-inline {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0;
+    font-size: 0.78rem;
+    color: var(--text2);
+}
+
+.connected-label {
+    font-weight: 500;
+    color: var(--text3);
 }
 
 .connected-name {
-    font-size: 0.82rem;
     font-weight: 600;
+    color: var(--text);
 }
 
-.btn-remove {
-    background: none;
-    border: none;
-    font-size: 1.1rem;
+.connected-sep {
     color: var(--text3);
-    cursor: pointer;
-    padding: 0 4px;
-    line-height: 1;
+    font-size: 0.7rem;
 }
-.btn-remove:hover { color: var(--pop); }
+
+.connected-action {
+    font-weight: 600;
+    color: var(--text2);
+    text-decoration: none;
+    cursor: pointer;
+}
+.connected-action:hover { color: var(--text); }
+.connected-disconnect { color: var(--text3); }
+.connected-disconnect:hover { color: var(--pop); }
 
 .btn-text-small {
     font-size: 0.78rem;
@@ -810,10 +808,63 @@ body {
 .btn-text-small:hover { color: var(--text); }
 
 /* ============================
+   ONBOARDING
+   ============================ */
+.onboarding-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 0 28px;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+    min-height: 100dvh;
+}
+
+.onboarding-top {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.onboarding-hello {
+    font-size: clamp(2rem, 8vw, 3rem);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    margin-bottom: 16px;
+}
+
+.onboarding-sub {
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--text2);
+    line-height: 1.5;
+    max-width: 360px;
+}
+
+.onboarding-bottom {
+    padding-bottom: 48px;
+}
+
+/* ============================
+   MoM CHANGE
+   ============================ */
+.result-row-mom {
+    padding: 0 0 4px;
+}
+
+.row-mom {
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+/* ============================
    RESPONSIVE
    ============================ */
 @media (min-width: 600px) {
     .rotating-wrap { font-size: 5rem; }
-    .row-1yr .row-amount { font-size: 4.5rem; }
+    .row-30 .row-amount { font-size: 4.5rem; }
     .picker-grid { grid-template-columns: 1fr 1fr 1fr; }
 }

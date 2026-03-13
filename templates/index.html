@@ -24,15 +24,27 @@
                 <p class="welcome-pre">how much did i spend on</p>
                 <div class="rotating-emoji" id="rotatingEmoji">&#x1f436;</div>
                 <div class="rotating-wrap">
-                    <span class="rotating-word" id="rotatingWord">dog</span><span class="dot-com">.com</span>
+                    <span class="rotating-word" id="rotatingWord">dog</span>
                 </div>
             </div>
             <div class="welcome-bottom">
                 <div id="googleSignInBtn" class="google-signin-container"></div>
-                <button id="connectBankBtn" class="btn-main" onclick="startPlaidLink()" style="display:none">connect your bank</button>
-                <p id="welcomePlaidNote" class="welcome-fine" style="display:none">read-only via plaid &middot; we never store credentials</p>
                 <div id="welcomeAuth" class="welcome-auth"></div>
                 <p class="welcome-fine" style="margin-top:6px;opacity:0.5;">built in a chaotic home with a toddler by shashank</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== ONBOARDING ========== -->
+    <div id="onboarding" class="screen">
+        <div class="onboarding-wrap">
+            <div class="onboarding-top">
+                <p class="onboarding-hello" id="onboardingHello">hello!</p>
+                <p class="onboarding-sub">connect your bank account and credit card accounts to get insights that you care about</p>
+            </div>
+            <div class="onboarding-bottom">
+                <button class="btn-main" onclick="startPlaidLink()">connect your bank account</button>
+                <p class="welcome-fine" style="margin-top:14px;">read-only via plaid &middot; we never store credentials</p>
             </div>
         </div>
     </div>
@@ -41,15 +53,11 @@
     <div id="picker" class="screen">
         <div class="picker-header">
             <div class="picker-header-left" id="pickerAuthArea"></div>
-            <button class="btn-text-small" onclick="addMoreAccounts()">+ add account</button>
         </div>
 
         <!-- Connected accounts -->
         <div id="connectedAccountsSection" class="connected-section" style="display:none;">
-            <div class="connected-header">
-                <span class="saved-title">connected accounts</span>
-            </div>
-            <div class="connected-list" id="connectedList"></div>
+            <div class="connected-inline" id="connectedList"></div>
         </div>
 
         <!-- Saved Categories -->
@@ -64,7 +72,7 @@
             <p class="picker-pre">how much did i spend on</p>
             <div class="carousel-area" id="carouselArea" onclick="selectCarousel()">
                 <div class="carousel-emoji" id="carouselEmoji">&#x1f436;</div>
-                <div class="carousel-word" id="carouselWord">dog<span class="carousel-dot">.com</span></div>
+                <div class="carousel-word" id="carouselWord">dog</div>
                 <p class="carousel-hint" id="carouselHint">tap to select</p>
             </div>
 
@@ -86,7 +94,7 @@
     <!-- ========== LOADING ========== -->
     <div id="loading" class="screen">
         <div class="loading-wrap">
-            <div class="loading-word" id="loadingWord">dog.com</div>
+            <div class="loading-word" id="loadingWord">dog</div>
             <div class="progress-wrap">
                 <div class="progress-bar" id="progressBar"></div>
             </div>
@@ -119,7 +127,7 @@
                 </div>
             </div>
 
-            <p class="results-on" id="resultsOn">on dog.com</p>
+            <p class="results-on" id="resultsOn">on dog</p>
             <p class="results-meta" id="resultsMeta"></p>
 
             <button class="btn-track" id="trackBtn" onclick="trackCategory()">track this</button>

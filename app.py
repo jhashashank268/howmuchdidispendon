@@ -64,6 +64,9 @@ def _serialize_txn(txn):
     cat = txn.get("category") or []
     if not isinstance(cat, list):
         cat = [str(cat)]
+    loc = txn.get("location") or {}
+    if not isinstance(loc, dict):
+        loc = {}
     return {
         "transaction_id": txn.get("transaction_id", ""),
         "date": str(txn.get("date", "")),
@@ -74,6 +77,11 @@ def _serialize_txn(txn):
         "personal_finance_category": {
             "primary": str(pf.get("primary") or ""),
             "detailed": str(pf.get("detailed") or ""),
+        },
+        "location": {
+            "city": str(loc.get("city") or ""),
+            "region": str(loc.get("region") or ""),
+            "country": str(loc.get("country") or ""),
         },
     }
 
@@ -132,9 +140,11 @@ def _run_single_analysis(all_transactions, institution_names, category, linked, 
 
     today = date.today()
     d30 = str(today - timedelta(days=30))
+    d60 = str(today - timedelta(days=60))
     d90 = str(today - timedelta(days=90))
 
     total_30d = sum(t["amount"] for t in result["transactions"] if t["date"] >= d30)
+    prior_30d = sum(t["amount"] for t in result["transactions"] if d60 <= t["date"] < d30)
     total_90d = sum(t["amount"] for t in result["transactions"] if t["date"] >= d90)
 
     all_dates = [t["date"] for t in all_transactions if t.get("date")]
@@ -142,6 +152,7 @@ def _run_single_analysis(all_transactions, institution_names, category, linked, 
     days_available = (today - date.fromisoformat(earliest)).days
 
     result["total_30d"] = round(total_30d, 2)
+    result["prior_30d"] = round(prior_30d, 2)
     result["total_90d"] = round(total_90d, 2)
     result["total_1yr"] = result["total_spent"]
     result["days_available"] = days_available
