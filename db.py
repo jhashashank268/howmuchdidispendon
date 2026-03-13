@@ -135,6 +135,17 @@ def init_db():
                 last_analyzed_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT NOW()
             )""")
+        _execute(conn, """
+            CREATE TABLE IF NOT EXISTS events (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER,
+                anon_id TEXT,
+                event TEXT NOT NULL,
+                properties JSONB DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT NOW()
+            )""")
+        _execute(conn, "CREATE INDEX IF NOT EXISTS idx_events_event ON events(event)")
+        _execute(conn, "CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at)")
         # Add user_id/anon_id columns to existing tables
         for table in ("linked_accounts", "accounts", "analysis_cache", "transaction_cache"):
             _safe_alter(conn, table, "user_id", "INTEGER")
@@ -199,6 +210,18 @@ def init_db():
         conn.execute(
             "INSERT OR IGNORE INTO user_settings (id, pet_name, analysis_days) VALUES (1, 'my dog', 90)"
         )
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                anon_id TEXT,
+                event TEXT NOT NULL,
+                properties TEXT DEFAULT '{}',
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_events_event ON events(event);
+            CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
+        """)
         # Add user_id/anon_id columns to existing tables
         for table in ("linked_accounts", "accounts", "analysis_cache", "transaction_cache"):
             _safe_alter(conn, table, "user_id", "INTEGER")
@@ -238,6 +261,13 @@ def upsert_user(google_id, email, name):
             (google_id, email, name))
         row = _fetchone(conn, "SELECT id, google_id, email, name FROM users WHERE google_id=?", (google_id,))
     conn.commit()
+    conn.close()
+    return row
+
+
+def get_user_by_google_id(google_id):
+    conn = get_conn()
+    row = _fetchone(conn, f"SELECT id FROM users WHERE google_id={PH}", (google_id,))
     conn.close()
     return row
 
@@ -486,6 +516,56 @@ def clear_all_data(user_id=None, anon_id=None):
         _execute(conn, "DELETE FROM saved_categories")
     conn.commit()
     conn.close()
+
+
+# --- events / telemetry ---
+
+def log_event(event, properties=None, user_id=None, anon_id=None):
+    """Log an analytics event. Never raises — telemetry must not break the app."""
+    try:
+        conn = get_conn()
+        props_json = json.dumps(properties or {})
+        if DATABASE_URL:
+            _execute(conn, "INSERT INTO events (user_id, anon_id, event, properties) VALUES (%s,%s,%s,%s)",
+                (user_id, anon_id, event, props_json))
+        else:
+            _execute(conn, "INSERT INTO events (user_id, anon_id, event, properties) VALUES (?,?,?,?)",
+                (user_id, anon_id, event, props_json))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def get_events_summary():
+    """Return basic analytics summary."""
+    conn = get_conn()
+    if DATABASE_URL:
+        total_users = _fetchone(conn, "SELECT count(*) as c FROM users")
+        signups_7d = _fetchone(conn, "SELECT count(*) as c FROM events WHERE event='user_signup' AND created_at > NOW() - INTERVAL '7 days'")
+        active_7d = _fetchone(conn, "SELECT count(DISTINCT user_id) as c FROM events WHERE created_at > NOW() - INTERVAL '7 days' AND user_id IS NOT NULL")
+        total_searches = _fetchone(conn, "SELECT count(*) as c FROM events WHERE event='search'")
+        top_searches = _fetchall(conn, "SELECT properties->>'category' as category, count(*) as c FROM events WHERE event='search' GROUP BY 1 ORDER BY 2 DESC LIMIT 20")
+        banks_connected = _fetchone(conn, "SELECT count(*) as c FROM events WHERE event='bank_connected'")
+        recent_events = _fetchall(conn, "SELECT event, user_id, properties, created_at FROM events ORDER BY created_at DESC LIMIT 50")
+    else:
+        total_users = _fetchone(conn, "SELECT count(*) as c FROM users")
+        signups_7d = _fetchone(conn, "SELECT count(*) as c FROM events WHERE event='user_signup' AND created_at > datetime('now', '-7 days')")
+        active_7d = _fetchone(conn, "SELECT count(DISTINCT user_id) as c FROM events WHERE created_at > datetime('now', '-7 days') AND user_id IS NOT NULL")
+        total_searches = _fetchone(conn, "SELECT count(*) as c FROM events WHERE event='search'")
+        top_searches = _fetchall(conn, "SELECT json_extract(properties, '$.category') as category, count(*) as c FROM events WHERE event='search' GROUP BY 1 ORDER BY 2 DESC LIMIT 20")
+        banks_connected = _fetchone(conn, "SELECT count(*) as c FROM events WHERE event='bank_connected'")
+        recent_events = _fetchall(conn, "SELECT event, user_id, properties, created_at FROM events ORDER BY created_at DESC LIMIT 50")
+    conn.close()
+    return {
+        "total_users": total_users["c"] if total_users else 0,
+        "signups_last_7d": signups_7d["c"] if signups_7d else 0,
+        "active_users_last_7d": active_7d["c"] if active_7d else 0,
+        "total_searches": total_searches["c"] if total_searches else 0,
+        "total_bank_connections": banks_connected["c"] if banks_connected else 0,
+        "top_searches": top_searches or [],
+        "recent_events": recent_events or [],
+    }
 
 
 init_db()

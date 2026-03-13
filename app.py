@@ -221,7 +221,12 @@ def auth_google():
     except Exception as e:
         return jsonify({"error": f"Invalid credential: {e}"}), 401
 
+    # Check if new signup vs returning login
+    existing = db.get_user_by_google_id(google_id)
     user = db.upsert_user(google_id, email, name)
+    if not existing:
+        db.log_event("user_signup", {"email_domain": email.split("@")[-1] if email else ""}, user_id=user["id"])
+    db.log_event("user_login", {}, user_id=user["id"])
     old_anon_id = session.get("anon_id")
     session["user_id"] = user["id"]
     session.pop("anon_id", None)
@@ -284,6 +289,7 @@ def exchange_token():
                 "balances": a.get("balances", {}),
             })
         db.upsert_accounts(item_id, accounts_data, user_id=uid, anon_id=aid)
+        db.log_event("bank_connected", {"institution": institution}, user_id=uid, anon_id=aid)
         return jsonify({"success": True, "item_id": item_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -325,6 +331,9 @@ def analysis():
     linked = db.get_all_access_tokens(user_id=uid, anon_id=aid)
     if not linked:
         return jsonify({"error": "No bank connected. Please link your account."}), 400
+
+    is_preset = any(c["key"] == category for c in CATEGORIES)
+    db.log_event("search", {"category": category, "is_preset": is_preset}, user_id=uid, anon_id=aid)
 
     analysis_cache_key = "|".join(sorted(l["item_id"] for l in linked)) + f":{category}"
     cached = db.get_cached_analysis(analysis_cache_key)
@@ -372,6 +381,7 @@ def remove_institution():
 
     plaid_client.remove_item(access_token)
     db.remove_linked_account(item_id)
+    db.log_event("bank_removed", {"item_id": item_id}, user_id=uid, anon_id=aid)
 
     remaining = db.get_all_access_tokens(user_id=uid, anon_id=aid)
     return jsonify({"success": True, "remaining": len(remaining)})
@@ -416,6 +426,7 @@ def saved_categories_create():
     total = data.get("total")
     uid, aid = _get_scope()
     db.upsert_saved_category(category, emoji, total, user_id=uid, anon_id=aid)
+    db.log_event("category_saved", {"category": category}, user_id=uid, anon_id=aid)
     return jsonify({"success": True})
 
 
@@ -424,6 +435,12 @@ def saved_categories_delete(cat_id):
     uid, aid = _get_scope()
     db.delete_saved_category(cat_id, user_id=uid, anon_id=aid)
     return jsonify({"success": True})
+
+
+@app.route("/api/analytics")
+def analytics():
+    """Simple analytics dashboard endpoint."""
+    return jsonify(db.get_events_summary())
 
 
 @app.route("/api/debug/location_sample")
