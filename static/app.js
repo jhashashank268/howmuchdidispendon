@@ -5,32 +5,9 @@ let currentUser = null; // { id, name, email } or null
 let prefetchedCategories = new Set();
 let prefetchPollTimer = null;
 const analysisCache = {}; // category -> API response, avoids redundant LLM calls
-
-// ===== THEME =====
-function initTheme() {
-    const saved = localStorage.getItem("theme");
-    if (saved) {
-        document.documentElement.dataset.theme = saved;
-    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        document.documentElement.dataset.theme = "dark";
-    }
-}
-
-function toggleTheme() {
-    const current = document.documentElement.dataset.theme;
-    const next = current === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("theme", next);
-
-    // Animate the toggle button
-    document.querySelectorAll(".theme-toggle").forEach(btn => {
-        btn.style.transform = "scale(0.8) rotate(180deg)";
-        setTimeout(() => { btn.style.transform = ""; }, 300);
-    });
-}
-
-// Apply theme immediately (before DOM ready)
-initTheme();
+let islandOpen = false;
+let islandTxnsLoaded = false;
+let refinementStack = []; // stack of { query, data } for drill-down
 
 const CATEGORIES = [
     { key: "dog", emoji: "\u{1F436}", label: "dog" },
@@ -84,10 +61,65 @@ const CAT_ICONS = {
 };
 
 // ===== SCREENS =====
-function showScreen(id) {
+let screenHistory = [];
+let handlingPopState = false;
+
+function showScreen(id, { pushState = true } = {}) {
+    // Close island if open when switching screens
+    if (islandOpen) collapseIsland();
+
     document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
     document.getElementById(id).classList.add("active");
+
+    if (pushState && !handlingPopState) {
+        // Avoid duplicate pushes for same screen
+        const current = history.state?.screen;
+        if (current !== id) {
+            history.pushState({ screen: id }, "", "");
+            screenHistory.push(id);
+        }
+    }
 }
+
+window.addEventListener("popstate", (e) => {
+    handlingPopState = true;
+
+    // If island is open, close it on back
+    if (islandOpen) {
+        collapseIsland();
+        // Re-push current state so we stay on the same screen
+        const currentScreen = document.querySelector(".screen.active")?.id || "picker";
+        history.pushState({ screen: currentScreen }, "", "");
+        handlingPopState = false;
+        return;
+    }
+
+    // If we have refinements stacked, pop one level
+    const activeScreen = document.querySelector(".screen.active")?.id;
+    if (activeScreen === "results" && refinementStack.length > 0) {
+        const prev = refinementStack.pop();
+        analysisData = prev.data;
+        selectedCategory = prev.query;
+        renderResults(analysisData);
+        renderRefinementChain();
+        updateTrackButton();
+        handlingPopState = false;
+        return;
+    }
+
+    const target = e.state?.screen;
+    if (target) {
+        showScreen(target, { pushState: false });
+    } else {
+        // No state — go to the default home screen
+        if (activeScreen === "results") {
+            showScreen("picker", { pushState: false });
+        } else if (activeScreen === "loading") {
+            showScreen("picker", { pushState: false });
+        }
+    }
+    handlingPopState = false;
+});
 
 function showError(msg) {
     const box = document.getElementById("errorBox");
@@ -405,18 +437,38 @@ function showHome() {
         if (e.key === "Enter") analyzeCustom();
     });
 
+    const refineInput = document.getElementById("refineInput");
+    if (refineInput) {
+        refineInput.addEventListener("keydown", e => {
+            if (e.key === "Enter") runRefinement();
+        });
+    }
+
     showScreen("picker");
 }
 
 async function loadSpendingSummary() {
     const el = document.getElementById("spendingSummary");
+    islandTxnsLoaded = false;
     try {
         const resp = await fetch("/api/spending_summary");
         if (!resp.ok) { el.style.display = "none"; return; }
         const data = await resp.json();
         if (data.total > 0) {
             el.style.display = "block";
-            el.innerHTML = `<span class="summary-total">${fmt(data.total)}</span> spent across <span class="summary-count">${data.count.toLocaleString()}</span> transactions`;
+            el.onclick = toggleIsland;
+            el.innerHTML = `
+                <div class="island-pill">
+                    <span class="summary-total">${fmt(data.total)}</span> spent across <span class="summary-count">${data.count.toLocaleString()}</span> transactions <span style="color:var(--text3)">last 30 days</span>
+                </div>
+                <div class="island-header" onclick="event.stopPropagation();collapseIsland();">
+                    <div class="island-header-left">
+                        <div class="island-header-total">${fmt(data.total)} spent</div>
+                        <div class="island-header-sub">${data.count.toLocaleString()} transactions &middot; last 30 days</div>
+                    </div>
+                    <button class="island-header-close">done</button>
+                </div>
+                <div class="island-body"></div>`;
         } else {
             el.style.display = "none";
         }
@@ -424,6 +476,84 @@ async function loadSpendingSummary() {
         console.error("spending summary error:", e);
         el.style.display = "none";
     }
+}
+
+// ===== SPENDING ISLAND (Dynamic Island expand) =====
+function toggleIsland() {
+    const el = document.getElementById("spendingSummary");
+    if (islandOpen) {
+        collapseIsland();
+    } else {
+        expandIsland();
+    }
+}
+
+async function expandIsland() {
+    const el = document.getElementById("spendingSummary");
+    islandOpen = true;
+    document.body.style.overflow = "hidden";
+    el.classList.add("island-open");
+    history.pushState({ island: true, screen: "picker" }, "", "");
+
+    if (!islandTxnsLoaded) {
+        const body = el.querySelector(".island-body");
+        body.innerHTML = '<p style="text-align:center;padding:32px 0;color:var(--text3);font-size:0.85rem;">loading transactions...</p>';
+        try {
+            const resp = await fetch("/api/transactions");
+            const txns = await resp.json();
+            renderIslandTransactions(body, txns);
+            islandTxnsLoaded = true;
+        } catch (e) {
+            body.innerHTML = '<p style="text-align:center;padding:32px 0;color:var(--text3);font-size:0.85rem;">failed to load transactions</p>';
+        }
+    }
+}
+
+function collapseIsland() {
+    const el = document.getElementById("spendingSummary");
+    islandOpen = false;
+    document.body.style.overflow = "";
+    el.classList.remove("island-open");
+}
+
+function renderIslandTransactions(container, txns) {
+    if (!txns || txns.length === 0) {
+        container.innerHTML = '<p style="text-align:center;padding:32px 0;color:var(--text3);font-size:0.85rem;">no transactions found</p>';
+        return;
+    }
+
+    let html = "";
+    let lastDateLabel = "";
+
+    for (const txn of txns) {
+        const dateStr = txn.date || "";
+        const dateObj = dateStr ? new Date(dateStr + "T00:00:00") : null;
+        const dateLabel = dateObj
+            ? dateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+            : "Unknown";
+
+        if (dateLabel !== lastDateLabel) {
+            html += `<div class="island-date-header">${dateLabel}</div>`;
+            lastDateLabel = dateLabel;
+        }
+
+        const merchant = txn.merchant_name || "";
+        const detail = merchant && merchant !== txn.name ? merchant : "";
+        const cat = txn.personal_finance_category;
+        const catLabel = cat && cat.primary ? cat.primary.toLowerCase().replace(/_/g, " ") : "";
+        const detailParts = [detail, catLabel].filter(Boolean).join(" \u00B7 ");
+
+        html += `
+            <div class="island-txn">
+                <div class="island-txn-info">
+                    <div class="island-txn-name">${escapeHtml(txn.name)}</div>
+                    ${detailParts ? `<div class="island-txn-detail">${escapeHtml(detailParts)}</div>` : ""}
+                </div>
+                <div class="island-txn-amount">${fmtD(txn.amount)}</div>
+            </div>`;
+    }
+
+    container.innerHTML = html;
 }
 
 function renderHomeHeader() {
@@ -586,6 +716,10 @@ async function runAnalysis() {
 
 // ===== RESULTS =====
 function renderResults(data) {
+    const refineInput = document.getElementById("refineInput");
+    if (refineInput) refineInput.value = "";
+    renderRefinementChain();
+
     const days = data.days_available || 365;
     const stack = document.querySelector(".results-stack");
 
@@ -629,10 +763,10 @@ function renderResults(data) {
             </div>`;
     }
 
+    const displayLabel = refinementStack.length > 0 ? buildRefinementLabel() : selectedCategory;
     const catObj = CATEGORIES.find(c => c.key === selectedCategory);
-    const emoji = catObj ? catObj.emoji + " " : "";
     const resultEmoji = data.emoji || (catObj ? catObj.emoji : "");
-    document.getElementById("resultsOn").innerHTML = `on ${resultEmoji ? resultEmoji + " " : ""}${escapeHtml(selectedCategory)}`;
+    document.getElementById("resultsOn").innerHTML = `on ${resultEmoji ? resultEmoji + " " : ""}${escapeHtml(displayLabel)}`;
 
     let metaText = `${data.transaction_count} transactions \u00B7 ${data.total_transactions_analyzed} analyzed`;
     if (days < 90) {
@@ -705,6 +839,7 @@ function toggleSec(idx) {
 function goBack() { goHome(); }
 
 function goHome() {
+    refinementStack = [];
     carouselPaused = false;
     document.getElementById("carouselHint").textContent = "tap to select";
     document.getElementById("carouselHint").classList.remove("paused");
@@ -716,9 +851,79 @@ function goHome() {
     showScreen("picker");
 }
 
+// ===== REFINEMENT =====
+function buildRefinementLabel() {
+    const labels = refinementStack.map(s => s.query);
+    labels.push(selectedCategory);
+    return labels.join(" \u2192 ");
+}
+
+function renderRefinementChain() {
+    const el = document.getElementById("refinementChain");
+    if (!el) return;
+    if (refinementStack.length === 0) {
+        el.style.display = "none";
+        return;
+    }
+    const allQueries = refinementStack.map(s => s.query);
+    allQueries.push(selectedCategory);
+    el.style.display = "flex";
+    el.innerHTML = allQueries.map((q, i) => {
+        const chip = `<span class="refine-chip">${escapeHtml(q)}</span>`;
+        return i < allQueries.length - 1 ? chip + '<span class="refine-arrow">\u2192</span>' : chip;
+    }).join("");
+}
+
+async function runRefinement() {
+    const input = document.getElementById("refineInput");
+    const query = (input ? input.value : "").trim();
+    if (!query || !analysisData || !analysisData.transactions || analysisData.transactions.length === 0) return;
+
+    // Push current state onto stack
+    refinementStack.push({ query: selectedCategory, data: analysisData });
+    history.pushState({ screen: "results" }, "", "");
+
+    selectedCategory = query;
+    showScreen("loading");
+    animateProgress();
+
+    try {
+        const resp = await fetch("/api/analysis/refine", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query, transactions: analysisData.transactions }),
+        });
+        const data = await resp.json();
+        stopProgress();
+
+        if (data.error) {
+            // Revert stack
+            const prev = refinementStack.pop();
+            selectedCategory = prev.query;
+            analysisData = prev.data;
+            showError(data.error);
+            showScreen("results");
+            return;
+        }
+
+        analysisData = data;
+        renderResults(data);
+        updateTrackButton();
+        showScreen("results");
+    } catch (e) {
+        stopProgress();
+        const prev = refinementStack.pop();
+        selectedCategory = prev.query;
+        analysisData = prev.data;
+        showError("Refinement failed: " + e.message);
+        showScreen("results");
+    }
+}
+
 // ===== TRACK CATEGORY =====
 async function trackCategory() {
     if (!analysisData) return;
+    const trackLabel = refinementStack.length > 0 ? buildRefinementLabel() : selectedCategory;
     const catObj = CATEGORIES.find(c => c.key === selectedCategory);
     const emoji = analysisData.emoji || (catObj ? catObj.emoji : null);
     try {
@@ -726,7 +931,7 @@ async function trackCategory() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                category: selectedCategory,
+                category: trackLabel,
                 emoji: emoji,
                 total: analysisData.total_30d || 0,
             }),
@@ -767,7 +972,7 @@ async function loadConnectedAccounts() {
         }
         section.style.display = "block";
         const names = institutions.map(inst =>
-            `<a href="#" class="connected-name" onclick="removeAccount('${escapeHtml(inst.item_id)}');return false;" title="tap to disconnect">${escapeHtml(inst.institution_name)}</a>`
+            `<span class="connected-name" style="cursor:default;">${escapeHtml(inst.institution_name)}</span><button onclick="removeAccount('${escapeHtml(inst.item_id)}','${escapeHtml(inst.institution_name)}');return false;" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:0.75rem;padding:0 2px;margin-left:2px;" title="Disconnect">&times;</button>`
         ).join('<span class="connected-sep">&middot;</span>');
         list.innerHTML = `
             <span class="connected-label">connected:</span>
@@ -777,8 +982,9 @@ async function loadConnectedAccounts() {
     } catch (e) {}
 }
 
-async function removeAccount(itemId) {
-    if (!confirm("Remove this account?")) return;
+async function removeAccount(itemId, institutionName) {
+    const name = institutionName || "this account";
+    if (!confirm(`Disconnect ${name}?\n\nYou will not be able to track expenses from this account until you reconnect it.`)) return;
     try {
         const resp = await fetch("/api/remove_institution", {
             method: "POST",
@@ -842,6 +1048,9 @@ async function checkBankAndProceed() {
     } catch (e) {}
     return false;
 }
+
+// Set initial history state
+history.replaceState({ screen: "welcome" }, "", "");
 
 (async function init() {
     const subCat = window.SUBDOMAIN_CATEGORY;

@@ -31,13 +31,7 @@
             <div class="welcome-bottom">
                 <div id="googleSignInBtn" class="google-signin-container"></div>
                 <div id="welcomeAuth" class="welcome-auth"></div>
-                <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;">
-                    <p class="welcome-fine" style="opacity:0.5;">built in a chaotic home with a toddler by shashank</p>
-                    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                        <svg class="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-                        <svg class="icon-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor"/></svg>
-                    </button>
-                </div>
+                <p class="welcome-fine" style="opacity:0.5;margin-top:6px;">built in a chaotic home with a toddler by shashank</p>
             </div>
         </div>
     </div>
@@ -60,13 +54,7 @@
     <div id="picker" class="screen">
         <div class="home-header">
             <div class="home-greeting" id="homeGreeting"></div>
-            <div class="home-header-right">
-                <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
-                    <svg class="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-                    <svg class="icon-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor"/></svg>
-                </button>
-                <a href="#" onclick="signOut();return false;" class="auth-link-small" id="homeSignOut" style="display:none;">sign out</a>
-            </div>
+            <a href="#" onclick="signOut();return false;" class="auth-link-small" id="homeSignOut" style="display:none;">sign out</a>
         </div>
 
         <!-- Connected accounts -->
@@ -132,6 +120,8 @@
         </div>
 
         <div class="results-body">
+            <div class="refinement-chain" id="refinementChain" style="display:none;"></div>
+
             <p class="results-pre">you spent</p>
 
             <div class="results-stack">
@@ -153,6 +143,11 @@
             <p class="results-meta" id="resultsMeta"></p>
 
             <button class="btn-track" id="trackBtn" onclick="trackCategory()">track this</button>
+
+            <div class="refine-wrap">
+                <input type="text" id="refineInput" class="refine-input" placeholder="refine these results...">
+                <button class="btn-refine" onclick="runRefinement()">refine &rarr;</button>
+            </div>
 
             <!-- Expandable categories -->
             <div class="txn-sections" id="txnSections"></div>

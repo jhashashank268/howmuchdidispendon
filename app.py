@@ -354,6 +354,47 @@ def analysis():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/analysis/refine", methods=["POST"])
+def analysis_refine():
+    data = request.json or {}
+    query = (data.get("query") or "").strip()
+    transactions = data.get("transactions")
+    if not query or not transactions:
+        return jsonify({"error": "Missing query or transactions"}), 400
+
+    uid, aid = _get_scope()
+    db.log_event("refine_search", {"query": query, "txn_count": len(transactions)}, user_id=uid, anon_id=aid)
+
+    try:
+        result = pet_categorizer.analyze_pet_spending(transactions, pet_name=query)
+
+        today = date.today()
+        d30 = str(today - timedelta(days=30))
+        d60 = str(today - timedelta(days=60))
+        d90 = str(today - timedelta(days=90))
+
+        total_30d = sum(t["amount"] for t in result["transactions"] if t["date"] >= d30)
+        prior_30d = sum(t["amount"] for t in result["transactions"] if d60 <= t["date"] < d30)
+        total_90d = sum(t["amount"] for t in result["transactions"] if t["date"] >= d90)
+
+        all_dates = [t["date"] for t in transactions if t.get("date")]
+        earliest = min(all_dates) if all_dates else str(today)
+        days_available = (today - date.fromisoformat(earliest)).days
+
+        result["total_30d"] = round(total_30d, 2)
+        result["prior_30d"] = round(prior_30d, 2)
+        result["total_90d"] = round(total_90d, 2)
+        result["total_1yr"] = result["total_spent"]
+        result["days_available"] = days_available
+        result["earliest_date"] = earliest
+        result["institutions"] = []
+        result["category"] = query
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/institutions")
 def institutions():
     uid, aid = _get_scope()
@@ -455,10 +496,32 @@ def spending_summary():
         if error:
             return jsonify({"total": 0, "count": 0})
         cached_txns, _ = result
+    # Filter to last 30 days only
+    d30 = str(date.today() - timedelta(days=30))
     # Plaid: positive amount = money out (expense)
-    expenses = [t for t in cached_txns if t.get("amount", 0) > 0]
+    expenses = [t for t in cached_txns if t.get("amount", 0) > 0 and t.get("date", "") >= d30]
     total = sum(t["amount"] for t in expenses)
     return jsonify({"total": round(total, 2), "count": len(expenses)})
+
+
+@app.route("/api/transactions")
+def transactions_list():
+    """Return all transactions from last 30 days, sorted most recent first."""
+    uid, aid = _get_scope()
+    linked = db.get_all_access_tokens(user_id=uid, anon_id=aid)
+    if not linked:
+        return jsonify([])
+    txn_cache_key = "|".join(sorted(l["item_id"] for l in linked))
+    cached_txns, _ = db.get_cached_transactions(txn_cache_key, max_age_minutes=1440)
+    if not cached_txns:
+        result, error = _get_transactions(user_id=uid, anon_id=aid)
+        if error:
+            return jsonify([])
+        cached_txns, _ = result
+    d30 = str(date.today() - timedelta(days=30))
+    txns = [t for t in cached_txns if t.get("amount", 0) > 0 and t.get("date", "") >= d30]
+    txns.sort(key=lambda t: t.get("date", ""), reverse=True)
+    return jsonify(txns)
 
 
 @app.route("/api/analytics")
