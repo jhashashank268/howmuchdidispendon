@@ -28,20 +28,18 @@ const CATEGORIES = [
 
 const CAROUSEL_EXAMPLES = [
     { emoji: "\u{1F37D}\uFE0F", label: "restaurants last week" },
-    { emoji: "\u{1F697}", label: "uber in the last month" },
+    { emoji: "\u{1F697}", label: "uber last month" },
     { emoji: "\u{1F961}", label: "takeout on weekends" },
     { emoji: "\u{1F4E6}", label: "amazon purchases" },
     { emoji: "\u{1F4F1}", label: "subscriptions over $20" },
-    { emoji: "\u2615", label: "coffee in san francisco" },
+    { emoji: "\u2615", label: "coffee this month" },
     { emoji: "\u2708\uFE0F", label: "flights to hawaii" },
     { emoji: "\u{1F6D2}", label: "groceries in january" },
-    { emoji: "\u{1F35F}", label: "fast food last 3 months" },
-    { emoji: "\u{1F436}", label: "dog expenses this year" },
+    { emoji: "\u{1F436}", label: "dog expenses" },
     { emoji: "\u{1F3E0}", label: "rent and utilities" },
-    { emoji: "\u{1F455}", label: "clothes last 6 months" },
+    { emoji: "\u{1F455}", label: "clothes last month" },
     { emoji: "\u{1F4AA}", label: "gym and fitness" },
     { emoji: "\u{1F381}", label: "gifts in december" },
-    { emoji: "\u{1F4BB}", label: "electronics over $100" },
     { emoji: "\u{1F695}", label: "taxis last weekend" },
 ];
 
@@ -177,7 +175,7 @@ function startRotation() {
             wordEl.classList.add("in");
             if (emojiEl) emojiEl.classList.remove("out");
         }, 300);
-    }, 2000);
+    }, 2500);
 }
 
 function stopRotation() {
@@ -390,7 +388,7 @@ function renderDashboard(cats) {
             const pctChange = ((cat.last_total - cat.previous_total) / cat.previous_total) * 100;
             const arrow = pctChange >= 0 ? "\u2191" : "\u2193";
             const cls = pctChange >= 0 ? "change-up" : "change-down";
-            changeHtml = `<span class="dash-row-change ${cls}">${arrow}${Math.abs(pctChange).toFixed(0)}%</span>`;
+            changeHtml = `<span class="dash-row-change ${cls}" title="vs prior 30 days">${arrow}${Math.abs(pctChange).toFixed(0)}%</span>`;
         }
 
         return `
@@ -483,6 +481,7 @@ async function loadSpendingSummary() {
 
             el.innerHTML = `
                 <div class="island-pill">
+                    <div class="pill-label">your expenses</div>
                     <div class="pill-stats-row">${pillParts.join('<span class="pill-sep">&middot;</span>')}</div>
                 </div>
                 <div class="island-header" onclick="event.stopPropagation();collapseIsland();">
@@ -499,6 +498,7 @@ async function loadSpendingSummary() {
             el.onclick = toggleIsland;
             el.innerHTML = `
                 <div class="island-pill">
+                    <div class="pill-label">your expenses</div>
                     <div class="pill-stats-row"><span class="pill-stat"><span class="pill-amount">${fmt(data.total)}</span> <span class="pill-period">30d</span></span></div>
                 </div>
                 <div class="island-header" onclick="event.stopPropagation();collapseIsland();">
@@ -627,6 +627,9 @@ function updateCarouselDisplay() {
     const ex = CAROUSEL_EXAMPLES[carouselIdx];
     document.getElementById("carouselEmoji").textContent = ex.emoji;
     document.getElementById("carouselWord").textContent = ex.label;
+    // Sync input placeholder with carousel
+    const input = document.getElementById("customCategory");
+    if (input && document.activeElement !== input) input.placeholder = ex.label;
 }
 
 function selectCarousel() {
@@ -642,34 +645,11 @@ function selectCarousel() {
 }
 
 // ===== ROTATING PLACEHOLDER =====
-const PLACEHOLDER_EXAMPLES = [
-    "type anything...",
-    "restaurants last week",
-    "uber in the last month",
-    "takeout on weekends",
-    "amazon purchases",
-    "subscriptions over $20",
-    "coffee in san francisco",
-    "flights to hawaii",
-    "groceries in january",
-    "fast food last 3 months",
-    "dog expenses this year",
-    "gym and fitness",
-    "electronics over $100",
-];
-let placeholderIdx = 0;
-let placeholderTimer = null;
-
+// Placeholder syncs with carousel — uses same examples
 function startPlaceholderRotation() {
+    // Placeholder now syncs with carousel — updated in updateCarouselDisplay()
     const input = document.getElementById("customCategory");
-    if (!input) return;
-    clearInterval(placeholderTimer);
-    placeholderIdx = 0;
-    placeholderTimer = setInterval(() => {
-        if (document.activeElement === input) return; // don't rotate while focused
-        placeholderIdx = (placeholderIdx + 1) % PLACEHOLDER_EXAMPLES.length;
-        input.placeholder = PLACEHOLDER_EXAMPLES[placeholderIdx];
-    }, 3000);
+    if (input) input.placeholder = CAROUSEL_EXAMPLES[carouselIdx].label;
 }
 
 // ===== CONTEXTUAL REFINE PLACEHOLDERS =====
@@ -1046,13 +1026,9 @@ async function loadConnectedAccounts() {
         }
         section.style.display = "block";
         const names = institutions.map(inst =>
-            `<span class="connected-name" style="cursor:default;">${escapeHtml(inst.institution_name)}</span><button onclick="removeAccount('${escapeHtml(inst.item_id)}','${escapeHtml(inst.institution_name)}');return false;" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:0.75rem;padding:0 2px;margin-left:2px;" title="Disconnect">&times;</button>`
+            `<span class="connected-name" style="cursor:default;">${escapeHtml(inst.institution_name)}</span>`
         ).join('<span class="connected-sep">&middot;</span>');
-        list.innerHTML = `
-            <span class="connected-label">connected:</span>
-            ${names}
-            <span class="connected-sep">&middot;</span>
-            <a href="#" class="connected-action" onclick="addMoreAccounts();return false;">+ add</a>`;
+        list.innerHTML = `<span class="connected-label">connected:</span> ${names} <span class="connected-sep">&middot;</span> <a href="#" class="connected-action" onclick="addMoreAccounts();return false;">+ add</a>`;
     } catch (e) {}
 }
 
