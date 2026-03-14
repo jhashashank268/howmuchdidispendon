@@ -20,6 +20,13 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev")
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 
+
+@app.after_request
+def set_cache_headers(response):
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 CATEGORIES = [
     {"key": "dog", "emoji": "\U0001f436"},
     {"key": "groceries", "emoji": "\U0001f6d2"},
