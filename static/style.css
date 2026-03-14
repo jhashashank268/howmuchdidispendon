@@ -749,9 +749,6 @@ body::before {
 .row-90 .row-amount { font-size: 1.5rem; }
 .row-90 .row-label { font-size: 0.78rem; }
 
-.row-1yr .row-amount { font-size: 2.4rem; }
-.row-1yr .row-label { font-size: 0.85rem; }
-
 .results-on {
     font-size: 1.1rem;
     font-weight: 600;
@@ -950,16 +947,15 @@ body::before {
    ============================ */
 .btn-track {
     display: inline-block;
-    padding: 10px 24px;
-    font-size: 0.85rem;
+    padding: 6px 14px;
+    font-size: 0.78rem;
     font-weight: 600;
     font-family: inherit;
     color: var(--text);
     background: none;
     border: 1.5px solid var(--border);
-    border-radius: 10px;
+    border-radius: 20px;
     cursor: pointer;
-    margin-bottom: 24px;
     transition: all 0.2s var(--spring);
     -webkit-appearance: none;
 }
@@ -968,7 +964,15 @@ body::before {
 .btn-track.tracked {
     color: #34C759;
     border-color: #34C759;
-    cursor: default;
+    cursor: pointer;
+}
+.btn-track.track-pop {
+    animation: trackPop 0.4s var(--spring);
+}
+@keyframes trackPop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
 }
 
 /* ============================
@@ -1385,6 +1389,218 @@ body::before {
 }
 .btn-refine:hover { transform: translateY(-1px); }
 .btn-refine:active { transform: scale(0.95); opacity: 0.85; }
+
+/* ============================
+   TAB BAR
+   ============================ */
+.tab-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    background: var(--glass-bg);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    border-top: 1px solid var(--glass-border);
+    padding: 6px 0 calc(6px + var(--safe-bottom));
+    z-index: 100;
+}
+
+.tab-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 0;
+    background: none;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-appearance: none;
+    transition: opacity 0.2s;
+    opacity: 0.45;
+}
+
+.tab-item.active {
+    opacity: 1;
+}
+
+.tab-icon {
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+.tab-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text);
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+}
+
+/* Add bottom padding to tab screens so content isn't hidden behind tab bar */
+#picker, #income, #savings, #growth {
+    padding-bottom: calc(64px + var(--safe-bottom));
+}
+
+/* ============================
+   TAB SCREENS (Income, Savings, Growth)
+   ============================ */
+.tab-screen-header {
+    padding: 20px 20px 12px;
+    padding-top: calc(20px + var(--safe-top));
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.tab-screen-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text);
+}
+
+.tab-screen-body {
+    padding: 0 20px 24px;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Coming soon placeholder */
+.coming-soon {
+    text-align: center;
+    padding: 60px 0;
+}
+
+.coming-soon-emoji {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+
+.coming-soon-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+}
+
+.coming-soon-sub {
+    font-size: 0.85rem;
+    color: var(--text3);
+}
+
+/* Income screen */
+.income-stats {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.income-stat-card {
+    flex: 1;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 14px;
+    text-align: center;
+}
+
+.income-stat-amount {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.03em;
+}
+
+.income-stat-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 2px;
+}
+
+.income-section-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+    margin-top: 24px;
+}
+
+.income-source {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(128,128,128,0.08);
+}
+
+.income-source-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.income-source-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.income-source-freq {
+    font-size: 0.72rem;
+    color: var(--text3);
+    margin-top: 1px;
+}
+
+.income-source-amount {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #34C759;
+    flex-shrink: 0;
+    letter-spacing: -0.02em;
+}
+
+.income-month {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(128,128,128,0.08);
+}
+
+.income-month-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text2);
+}
+
+.income-month-amount {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+}
+
+.income-month-count {
+    font-size: 0.72rem;
+    color: var(--text3);
+    margin-left: 8px;
+}
 
 /* ============================
    RESPONSIVE

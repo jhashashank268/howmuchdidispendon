@@ -88,6 +88,14 @@ function showScreen(id, { pushState = true } = {}) {
     document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
     document.getElementById(id).classList.add("active");
 
+    // Show/hide tab bar — only on tab screens when bank is connected
+    const tabScreens = ["picker", "income", "savings", "growth"];
+    if (bankConnected && tabScreens.includes(id)) {
+        showTabBar();
+    } else {
+        hideTabBar();
+    }
+
     if (pushState && !handlingPopState) {
         // Avoid duplicate pushes for same screen
         const current = history.state?.screen;
@@ -231,6 +239,7 @@ function showOnboarding() {
 async function signOut() {
     await fetch("/api/auth/signout", { method: "POST" });
     currentUser = null;
+    incomeData = null;
     renderGoogleButton();
     renderAuthUI();
     showScreen("welcome");
@@ -656,26 +665,23 @@ function startPlaceholderRotation() {
 let refineRotateTimer = null;
 let refineRotateIdx = 0;
 
-function getRefineExamples(category) {
+function getRefineExamples(category, subLabels) {
     const cat = category.toLowerCase();
-    const specific = {
-        amazon: ["amazon subscriptions", "amazon over $50", "amazon last month"],
-        restaurants: ["restaurants over $30", "restaurants last week", "italian restaurants"],
-        coffee: ["coffee over $5", "coffee last week", "starbucks"],
-        groceries: ["groceries over $100", "groceries last week", "whole foods"],
-        uber: ["uber over $20", "uber last week", "uber eats"],
-    };
-    for (const [key, examples] of Object.entries(specific)) {
-        if (cat.includes(key)) return examples;
+    const examples = [];
+    // Add subcategory-based suggestions: "tesla insurance", "tesla subscription"
+    for (const sub of (subLabels || [])) {
+        if (sub !== cat) examples.push(`${cat} ${sub}`);
     }
-    return ["over $50", "last month", "last week"];
+    // Add generic refinements
+    examples.push("over $50", "last month", "last week");
+    return examples.slice(0, 6);
 }
 
-function startRefineRotation(category) {
+function startRefineRotation(category, subLabels) {
     clearInterval(refineRotateTimer);
     const input = document.getElementById("refineInput");
     if (!input) return;
-    const examples = getRefineExamples(category);
+    const examples = getRefineExamples(category, subLabels);
     refineRotateIdx = 0;
     input.placeholder = examples[0];
     refineRotateTimer = setInterval(() => {
@@ -782,19 +788,9 @@ function renderResults(data) {
 
     if (days <= 35) {
         stack.innerHTML = `
-            <div class="result-row row-1yr">
-                <span class="row-amount">${fmt(data.total_1yr || 0)}</span>
-                <span class="row-label">last ${days} days ${onLabel}</span>
-            </div>`;
-    } else if (days <= 95) {
-        stack.innerHTML = `
             <div class="result-row row-30">
-                <span class="row-amount">${fmt(data.total_30d || 0)}</span>
-                <span class="row-label">last 30 days ${onLabel}</span>
-            </div>
-            <div class="result-row row-1yr">
-                <span class="row-amount">${fmt(data.total_1yr || 0)}</span>
-                <span class="row-label">last ${days} days</span>
+                <span class="row-amount">${fmt(data.total_30d || data.total_1yr || 0)}</span>
+                <span class="row-label">last ${days} days ${onLabel}</span>
             </div>`;
     } else {
         let momHtml = "";
@@ -813,20 +809,18 @@ function renderResults(data) {
             <div class="result-row row-90">
                 <span class="row-amount" id="amt90">${fmt(data.total_90d || 0)}</span>
                 <span class="row-label">last 90 days</span>
-            </div>
-            <div class="result-row row-1yr">
-                <span class="row-amount" id="amt1yr">${fmt(data.total_1yr || 0)}</span>
-                <span class="row-label">last year</span>
             </div>`;
     }
 
-    let metaText = `${data.transaction_count} transactions \u00B7 ${data.total_transactions_analyzed} analyzed`;
+    let metaText = `${data.transaction_count} matching out of ${data.total_transactions_analyzed} transactions`;
     if (days < 90) {
-        metaText += ` \u00B7 ${days} days of bank history available`;
+        metaText += ` \u00B7 ${days} days of history`;
     }
     document.getElementById("resultsMeta").textContent = metaText;
 
-    startRefineRotation(displayLabel);
+    // Build smart refine examples from subcategories
+    const subLabels = (data.categories || []).map(c => c.label.toLowerCase());
+    startRefineRotation(displayLabel, subLabels);
     renderSections(data.categories);
 }
 
@@ -902,6 +896,10 @@ function goHome() {
     loadSavedCategories();
     loadConnectedAccounts();
     loadSpendingSummary();
+    // Reset tab bar to expenses
+    document.querySelectorAll(".tab-item").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.tab === "picker");
+    });
     showScreen("picker");
 }
 
@@ -975,40 +973,58 @@ async function runRefinement() {
 }
 
 // ===== TRACK CATEGORY =====
-async function trackCategory() {
+async function toggleTrack() {
     if (!analysisData) return;
     const trackLabel = refinementStack.length > 0 ? buildRefinementLabel() : selectedCategory;
-    const catObj = CATEGORIES.find(c => c.key === selectedCategory);
-    const emoji = analysisData.emoji || (catObj ? catObj.emoji : null);
-    try {
-        await fetch("/api/saved_categories", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                category: trackLabel,
-                emoji: emoji,
-                total: analysisData.total_30d || 0,
-            }),
-        });
-        const btn = document.getElementById("trackBtn");
-        btn.textContent = "tracking \u2713";
-        btn.disabled = true;
-        btn.classList.add("tracked");
-    } catch (e) {
-        showError("Failed to save: " + e.message);
+    const btn = document.getElementById("trackBtn");
+    const tracked = savedCategoriesList.find(c => c.category === trackLabel);
+
+    if (tracked) {
+        // Untrack
+        try {
+            await fetch(`/api/saved_categories/${tracked.id}`, { method: "DELETE" });
+            savedCategoriesList = savedCategoriesList.filter(c => c.id !== tracked.id);
+            btn.textContent = "track this";
+            btn.classList.remove("tracked");
+        } catch (e) {
+            showError("Failed to untrack: " + e.message);
+        }
+    } else {
+        // Track
+        const catObj = CATEGORIES.find(c => c.key === selectedCategory);
+        const emoji = analysisData.emoji || (catObj ? catObj.emoji : null);
+        try {
+            await fetch("/api/saved_categories", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    category: trackLabel,
+                    emoji: emoji,
+                    total: analysisData.total_30d || 0,
+                }),
+            });
+            // Reload saved categories to get the id
+            const resp2 = await fetch("/api/saved_categories");
+            savedCategoriesList = await resp2.json() || [];
+            btn.textContent = "tracking \u2713";
+            btn.classList.add("tracked");
+            btn.classList.add("track-pop");
+            setTimeout(() => btn.classList.remove("track-pop"), 400);
+        } catch (e) {
+            showError("Failed to save: " + e.message);
+        }
     }
 }
 
 function updateTrackButton() {
     const trackBtn = document.getElementById("trackBtn");
-    const isTracked = savedCategoriesList.some(c => c.category === selectedCategory);
+    const trackLabel = refinementStack.length > 0 ? buildRefinementLabel() : selectedCategory;
+    const isTracked = savedCategoriesList.some(c => c.category === trackLabel);
     if (isTracked) {
         trackBtn.textContent = "tracking \u2713";
-        trackBtn.disabled = true;
         trackBtn.classList.add("tracked");
     } else {
         trackBtn.textContent = "track this";
-        trackBtn.disabled = false;
         trackBtn.classList.remove("tracked");
     }
 }
@@ -1067,6 +1083,7 @@ async function doLogout() {
     if (!confirm("Disconnect all accounts and clear data?")) return;
     await fetch("/api/logout", { method: "POST" });
     analysisData = null;
+    incomeData = null;
     Object.keys(analysisCache).forEach(k => delete analysisCache[k]);
     bankConnected = false;
     currentUser = null;
@@ -1076,6 +1093,126 @@ async function doLogout() {
     renderAuthUI();
     showScreen("welcome");
     startRotation();
+}
+
+// ===== TAB BAR =====
+const TAB_SCREENS = ["picker", "income", "savings", "growth"];
+
+function switchTab(tabId) {
+    if (!TAB_SCREENS.includes(tabId)) return;
+
+    // Update tab bar active state
+    document.querySelectorAll(".tab-item").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.tab === tabId);
+    });
+
+    // Show the correct screen
+    showScreen(tabId);
+
+    // Load data for the tab if needed
+    if (tabId === "income") loadIncome();
+}
+
+function showTabBar() {
+    const bar = document.getElementById("tabBar");
+    if (bar) bar.style.display = "flex";
+}
+
+function hideTabBar() {
+    const bar = document.getElementById("tabBar");
+    if (bar) bar.style.display = "none";
+}
+
+// ===== INCOME TAB =====
+let incomeData = null;
+
+async function loadIncome() {
+    const body = document.getElementById("incomeBody");
+    if (!body) return;
+
+    // If already loaded, don't re-fetch
+    if (incomeData) {
+        renderIncome(incomeData);
+        return;
+    }
+
+    body.innerHTML = '<p style="color:var(--text3);font-size:0.88rem;text-align:center;padding:48px 0;">loading income data...</p>';
+
+    try {
+        const resp = await fetch("/api/income_summary");
+        if (!resp.ok) throw new Error("Failed to load");
+        incomeData = await resp.json();
+        renderIncome(incomeData);
+    } catch (e) {
+        body.innerHTML = '<p style="color:var(--text3);font-size:0.88rem;text-align:center;padding:48px 0;">could not load income data</p>';
+    }
+}
+
+function renderIncome(data) {
+    const body = document.getElementById("incomeBody");
+    if (!body) return;
+
+    if (data.last_30d === 0 && data.last_90d === 0 && (!data.sources || data.sources.length === 0)) {
+        body.innerHTML = `
+            <div class="coming-soon">
+                <p class="coming-soon-emoji">&#x1F4B5;</p>
+                <p class="coming-soon-text">no income detected yet</p>
+                <p class="coming-soon-sub">deposits and paychecks will appear here automatically</p>
+            </div>`;
+        return;
+    }
+
+    const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+    // Stats cards
+    let statsHtml = `<div class="income-stats">
+        <div class="income-stat-card">
+            <div class="income-stat-amount">${fmt(data.last_30d)}</div>
+            <div class="income-stat-label">last 30 days</div>
+        </div>
+        <div class="income-stat-card">
+            <div class="income-stat-amount">${fmt(data.last_90d)}</div>
+            <div class="income-stat-label">last 90 days</div>
+        </div>
+        <div class="income-stat-card">
+            <div class="income-stat-amount">${fmt(data.ytd_total)}</div>
+            <div class="income-stat-label">year to date</div>
+        </div>
+    </div>`;
+
+    // Recurring sources
+    let sourcesHtml = "";
+    if (data.sources && data.sources.length > 0) {
+        const sourceRows = data.sources.map(s => `
+            <div class="income-source">
+                <div class="income-source-info">
+                    <div class="income-source-name">${escapeHtml(s.name)}</div>
+                    <div class="income-source-freq">${s.frequency} &middot; avg ${fmt(s.monthly_avg)}/mo</div>
+                </div>
+                <div class="income-source-amount">+${fmt(s.monthly_avg)}</div>
+            </div>`).join("");
+        sourcesHtml = `<div class="income-section-title">recurring income</div>${sourceRows}`;
+    }
+
+    // Monthly breakdown
+    let monthlyHtml = "";
+    if (data.monthly && data.monthly.length > 0) {
+        const monthRows = data.monthly.map(m => {
+            const [yr, mo] = m.month.split("-");
+            const label = `${monthNames[parseInt(mo, 10) - 1]} ${yr}`;
+            return `
+                <div class="income-month">
+                    <span class="income-month-label">${label}</span>
+                    <span>
+                        <span class="income-month-amount">${fmt(m.total)}</span>
+                        <span class="income-month-count">${m.count} deposits</span>
+                    </span>
+                </div>`;
+        }).join("");
+        monthlyHtml = `<div class="income-section-title">monthly breakdown</div>${monthRows}`;
+    }
+
+    body.innerHTML = statsHtml + sourcesHtml + monthlyHtml;
 }
 
 // ===== INIT =====

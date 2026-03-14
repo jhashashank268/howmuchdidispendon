@@ -120,6 +120,7 @@
     <div id="results" class="screen">
         <div class="results-header">
             <button class="btn-back" onclick="goHome()">&larr; home</button>
+            <button class="btn-track" id="trackBtn" onclick="toggleTrack()">track this</button>
         </div>
 
         <div class="results-body">
@@ -134,14 +135,8 @@
                     <span class="row-amount" id="amt90">$0</span>
                     <span class="row-label">last 90 days</span>
                 </div>
-                <div class="result-row row-1yr">
-                    <span class="row-amount" id="amt1yr">$0</span>
-                    <span class="row-label">last year</span>
-                </div>
             </div>
             <p class="results-meta" id="resultsMeta"></p>
-
-            <button class="btn-track" id="trackBtn" onclick="trackCategory()">track this</button>
 
             <div class="refine-wrap">
                 <input type="text" id="refineInput" class="refine-input" placeholder="refine these results...">
@@ -154,6 +149,66 @@
             <button class="btn-secondary" onclick="goHome()" style="margin-top:20px;">back to home</button>
         </div>
     </div>
+
+    <!-- ========== INCOME ========== -->
+    <div id="income" class="screen">
+        <div class="tab-screen-header">
+            <h2 class="tab-screen-title">income</h2>
+        </div>
+        <div class="tab-screen-body" id="incomeBody">
+            <div class="income-loading">
+                <p style="color:var(--text3);font-size:0.88rem;text-align:center;padding:48px 0;">loading income data...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== SAVINGS ========== -->
+    <div id="savings" class="screen">
+        <div class="tab-screen-header">
+            <h2 class="tab-screen-title">savings</h2>
+        </div>
+        <div class="tab-screen-body">
+            <div class="coming-soon">
+                <p class="coming-soon-emoji">&#x1F4B0;</p>
+                <p class="coming-soon-text">savings tracking coming soon</p>
+                <p class="coming-soon-sub">see how much you're setting aside each month</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== GROWTH ========== -->
+    <div id="growth" class="screen">
+        <div class="tab-screen-header">
+            <h2 class="tab-screen-title">growth</h2>
+        </div>
+        <div class="tab-screen-body">
+            <div class="coming-soon">
+                <p class="coming-soon-emoji">&#x1F4C8;</p>
+                <p class="coming-soon-text">investment tracking coming soon</p>
+                <p class="coming-soon-sub">see how your money is growing over time</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== TAB BAR ========== -->
+    <nav class="tab-bar" id="tabBar" style="display:none;">
+        <button class="tab-item active" data-tab="picker" onclick="switchTab('picker')">
+            <span class="tab-icon">&#x1F4B8;</span>
+            <span class="tab-label">expenses</span>
+        </button>
+        <button class="tab-item" data-tab="income" onclick="switchTab('income')">
+            <span class="tab-icon">&#x1F4B5;</span>
+            <span class="tab-label">income</span>
+        </button>
+        <button class="tab-item" data-tab="savings" onclick="switchTab('savings')">
+            <span class="tab-icon">&#x1F3E6;</span>
+            <span class="tab-label">savings</span>
+        </button>
+        <button class="tab-item" data-tab="growth" onclick="switchTab('growth')">
+            <span class="tab-icon">&#x1F4C8;</span>
+            <span class="tab-label">growth</span>
+        </button>
+    </nav>
 
     <div id="errorBox" class="error-toast"></div>
     <script>

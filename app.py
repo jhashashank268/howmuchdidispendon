@@ -3,6 +3,7 @@ import time
 import json
 import uuid
 import threading
+from collections import defaultdict
 from datetime import date, timedelta
 from flask import Flask, render_template, request, jsonify, session
 from dotenv import load_dotenv
@@ -532,6 +533,133 @@ def spending_summary():
         txns = [t for t in all_expenses if t.get("date", "") >= cutoff]
         return {"total": round(sum(t["amount"] for t in txns), 2), "count": len(txns)}
     return jsonify({"d1": stats_for(d1), "d7": stats_for(d7), "d30": stats_for(d30)})
+
+
+# Categories that indicate refunds or non-real income
+_INCOME_EXCLUDE_CATEGORIES = {
+    "TRANSFER_IN_ACCOUNT_TRANSFER", "TRANSFER_OUT_ACCOUNT_TRANSFER",
+    "TRANSFER_IN_CREDIT_CARD_PAYMENT", "TRANSFER_OUT_CREDIT_CARD_PAYMENT",
+    "LOAN_PAYMENTS_CREDIT_CARD", "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
+    "BANK_FEES_REFUND",
+}
+
+
+def _is_real_income(txn):
+    """Return True if this transaction represents real income (not a transfer/refund)."""
+    amount = txn.get("amount", 0)
+    # In Plaid, negative amounts = money coming in
+    if amount >= 0:
+        return False
+    # Exclude very small amounts (likely refunds or trivial credits)
+    if amount > -10:
+        return False
+    pf = txn.get("personal_finance_category", {})
+    detailed = (pf.get("detailed") or "").upper()
+    primary = (pf.get("primary") or "").upper()
+    # Exclude transfers between accounts
+    if detailed in _INCOME_EXCLUDE_CATEGORIES or primary in ("TRANSFER_IN", "TRANSFER_OUT", "LOAN_PAYMENTS"):
+        return False
+    # Exclude credit card refunds by name pattern
+    name = (txn.get("name") or "").upper()
+    if any(kw in name for kw in ("PAYMENT THANK YOU", "AUTOPAY", "CREDIT CARD PAYMENT", "ONLINE PAYMENT", "REFUND")):
+        return False
+    return True
+
+
+def _detect_income_frequency(dates):
+    """Guess frequency from a sorted list of date strings. Returns 'weekly', 'biweekly', 'monthly', or 'irregular'."""
+    if len(dates) < 2:
+        return "irregular"
+    parsed = sorted(date.fromisoformat(d) for d in dates)
+    gaps = [(parsed[i + 1] - parsed[i]).days for i in range(len(parsed) - 1)]
+    avg_gap = sum(gaps) / len(gaps)
+    if avg_gap <= 9:
+        return "weekly"
+    if avg_gap <= 18:
+        return "biweekly"
+    if avg_gap <= 40:
+        return "monthly"
+    return "irregular"
+
+
+@app.route("/api/income_summary")
+def income_summary():
+    """Analyze income from transaction data: monthly breakdown, recurring sources, and totals."""
+    uid, aid = _get_scope()
+    linked = db.get_all_access_tokens(user_id=uid, anon_id=aid)
+    if not linked:
+        return jsonify({"monthly": [], "sources": [], "ytd_total": 0, "last_30d": 0, "last_90d": 0})
+
+    txn_cache_key = "|".join(sorted(l["item_id"] for l in linked))
+    cached_txns, _ = db.get_cached_transactions(txn_cache_key, max_age_minutes=1440)
+    if not cached_txns:
+        result, error = _get_transactions(user_id=uid, anon_id=aid)
+        if error:
+            return jsonify({"monthly": [], "sources": [], "ytd_total": 0, "last_30d": 0, "last_90d": 0})
+        cached_txns, _ = result
+
+    income_txns = [t for t in cached_txns if _is_real_income(t)]
+
+    today = date.today()
+    d30 = str(today - timedelta(days=30))
+    d90 = str(today - timedelta(days=90))
+    ytd_start = str(date(today.year, 1, 1))
+
+    # Amounts are negative in Plaid; we report positive income values
+    last_30d = round(sum(-t["amount"] for t in income_txns if t.get("date", "") >= d30), 2)
+    last_90d = round(sum(-t["amount"] for t in income_txns if t.get("date", "") >= d90), 2)
+    ytd_total = round(sum(-t["amount"] for t in income_txns if t.get("date", "") >= ytd_start), 2)
+
+    # Monthly breakdown
+    monthly_map = defaultdict(lambda: {"total": 0, "count": 0})
+    for t in income_txns:
+        month_key = t.get("date", "")[:7]  # "YYYY-MM"
+        if month_key:
+            monthly_map[month_key]["total"] += -t["amount"]
+            monthly_map[month_key]["count"] += 1
+
+    monthly = [
+        {"month": m, "total": round(v["total"], 2), "count": v["count"]}
+        for m, v in sorted(monthly_map.items(), reverse=True)
+    ]
+
+    # Detect recurring income sources
+    source_map = defaultdict(list)
+    for t in income_txns:
+        source_name = t.get("merchant_name") or t.get("name") or "Unknown"
+        source_map[source_name].append(t)
+
+    sources = []
+    for name, txns in source_map.items():
+        if len(txns) < 2:
+            continue
+        amounts = [-t["amount"] for t in txns]
+        avg_amount = sum(amounts) / len(amounts)
+        # Check if amounts are within 20% variance of the average
+        within_variance = all(abs(a - avg_amount) / avg_amount <= 0.20 for a in amounts)
+        if not within_variance:
+            continue
+        dates = sorted(t.get("date", "") for t in txns if t.get("date"))
+        # Calculate monthly average: total divided by number of distinct months spanned
+        distinct_months = len(set(d[:7] for d in dates))
+        monthly_avg = round(sum(amounts) / max(distinct_months, 1), 2)
+        frequency = _detect_income_frequency(dates)
+        sources.append({
+            "name": name,
+            "monthly_avg": monthly_avg,
+            "frequency": frequency,
+            "last_date": dates[-1] if dates else "",
+        })
+
+    sources.sort(key=lambda s: s["monthly_avg"], reverse=True)
+
+    return jsonify({
+        "monthly": monthly,
+        "sources": sources,
+        "ytd_total": ytd_total,
+        "last_30d": last_30d,
+        "last_90d": last_90d,
+    })
 
 
 @app.route("/api/transactions")
