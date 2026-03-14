@@ -535,35 +535,36 @@ def spending_summary():
     return jsonify({"d1": stats_for(d1), "d7": stats_for(d7), "d30": stats_for(d30)})
 
 
-# Categories that indicate refunds or non-real income
-_INCOME_EXCLUDE_CATEGORIES = {
-    "TRANSFER_IN_ACCOUNT_TRANSFER", "TRANSFER_OUT_ACCOUNT_TRANSFER",
-    "TRANSFER_IN_CREDIT_CARD_PAYMENT", "TRANSFER_OUT_CREDIT_CARD_PAYMENT",
-    "LOAN_PAYMENTS_CREDIT_CARD", "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
-    "BANK_FEES_REFUND",
+# Plaid categories that represent real income
+_INCOME_CATEGORIES = {
+    "INCOME_WAGES", "INCOME_DIVIDENDS_AND_INTEREST", "INCOME_RETIREMENT_PENSION",
+    "INCOME_TAX_REFUND", "INCOME_UNEMPLOYMENT", "INCOME_OTHER_INCOME",
 }
+
+# Name patterns that indicate payroll/employer deposits
+_PAYROLL_KEYWORDS = (
+    "PAYROLL", "DIRECT DEP", "DIRECT DEPOSIT", "SALARY", "WAGES",
+    "EMPLOYER", "GUSTO", "ADP", "PAYCHEX", "WORKDAY",
+)
 
 
 def _is_real_income(txn):
-    """Return True if this transaction represents real income (not a transfer/refund)."""
+    """Return True if this transaction represents real income (payroll, dividends, etc.)."""
     amount = txn.get("amount", 0)
     # In Plaid, negative amounts = money coming in
     if amount >= 0:
         return False
-    # Exclude very small amounts (likely refunds or trivial credits)
-    if amount > -10:
-        return False
     pf = txn.get("personal_finance_category", {})
     detailed = (pf.get("detailed") or "").upper()
     primary = (pf.get("primary") or "").upper()
-    # Exclude transfers between accounts
-    if detailed in _INCOME_EXCLUDE_CATEGORIES or primary in ("TRANSFER_IN", "TRANSFER_OUT", "LOAN_PAYMENTS"):
-        return False
-    # Exclude credit card refunds by name pattern
+    # Accept if Plaid categorized it as INCOME
+    if primary == "INCOME" or detailed in _INCOME_CATEGORIES:
+        return True
+    # Also accept large recurring-looking deposits that match payroll keywords
     name = (txn.get("name") or "").upper()
-    if any(kw in name for kw in ("PAYMENT THANK YOU", "AUTOPAY", "CREDIT CARD PAYMENT", "ONLINE PAYMENT", "REFUND")):
-        return False
-    return True
+    if amount <= -100 and any(kw in name for kw in _PAYROLL_KEYWORDS):
+        return True
+    return False
 
 
 def _detect_income_frequency(dates):
